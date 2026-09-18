@@ -13,7 +13,7 @@
 | 生き物の中身（状態・AI・湧き） | `src/main/java/net/erutobusiness/erutosmobs/entity/ShearwaterEntity.java` | この MOD |
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
-| 音 | `assets/erutosmobs/sounds.json`（ogg は未収録。`wavs/` で作る） | 別途 |
+| 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声） | 手元の音の道具 wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
 
 ## 状態と動き
 
@@ -25,7 +25,7 @@
 | SLEEP | sleep | 水面で夜になったら。朝に戻る |
 | TAKEOFF | takeoff | 浮いている時間が尽きたか、人が 6 ブロック以内に来たか、殴られたら |
 | cry / hurt / faint | 一度きり | 30〜100 秒ごとに鳴く／被弾／死（1.6 秒倒れて消える） |
-| STAND / WALK | stand / walk | 動きだけ用意。浜へ降りる AI は次の版 |
+| LAND → STAND / WALK | dive → stand / walk | 休む 3 回に 1 回は、20 ブロック以内の水辺の砂・草へ降りて立ち、たまによちよち歩く（10〜35 秒）。人が 8 ブロックに来たら飛び立つ |
 
 ## 建て方
 

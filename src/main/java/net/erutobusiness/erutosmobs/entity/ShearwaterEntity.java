@@ -6,7 +6,10 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
@@ -62,6 +65,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     public static final int HOVER = 6;
     public static final int STAND = 7;
     public static final int WALK = 8;
+    public static final int LAND = 9;
 
     private static final EntityDataAccessor<Integer> STATE =
             SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
@@ -93,6 +97,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private int paddleTime = 400;
     private int cryCooldown = 400;
     private double surfaceY = Double.NaN;
+    @Nullable
+    private BlockPos shoreTarget;
+    private int shoreTime = 300;
+    private float walkYaw;
+    private int walkTime = 40;
 
     public ShearwaterEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
@@ -181,7 +190,12 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     public boolean isFlying() {
         int s = getState();
-        return s == FLY || s == GLIDE || s == HOVER || s == TAKEOFF || s == DIVE;
+        return s == FLY || s == GLIDE || s == HOVER || s == TAKEOFF || s == DIVE || s == LAND;
+    }
+
+    public boolean isOnShore() {
+        int s = getState();
+        return s == STAND || s == WALK;
     }
 
     public boolean isOnWater() {
@@ -202,20 +216,27 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             case DIVE -> tickDive();
             case PADDLE, SLEEP -> tickOnWater(st);
             case TAKEOFF -> tickTakeoff();
-            case STAND, WALK -> {
-                // 次の版（浜へ降りる AI）。今は着水の流れへ戻す
-                setState(FLY);
-            }
+            case LAND -> tickLanding();
+            case STAND, WALK -> tickOnShore(st);
             default -> setState(FLY);
         }
-        if (--this.cryCooldown <= 0 && st != SLEEP && st != DIVE && st != TAKEOFF) {
-            this.cryCooldown = 600 + this.random.nextInt(1400);
-            triggerAnim("main", "cry");
-            this.playSound(ModSounds.SHEARWATER_CRY.get(), 2.0f, 0.95f + this.random.nextFloat() * 0.1f);
+        // ⚠ 実物「ほとんど海上で鳴くことはないが、夜間の営巣地では鳴き声や翼の音で騒がしくなる」
+        //   （ja.wikipedia）。飛んでいる間は 4 回に 1 回だけ、浮いている・立っている・夜は毎回鳴く。
+        if (--this.cryCooldown <= 0 && st != SLEEP && st != DIVE && st != TAKEOFF && st != LAND) {
+            this.cryCooldown = 800 + this.random.nextInt(1600);
+            boolean quietAtSea = isFlying() && !this.level().isNight() && this.random.nextInt(4) != 0;
+            if (!quietAtSea) {
+                triggerAnim("main", "cry");
+                this.playSound(ModSounds.SHEARWATER_CRY.get(), 2.0f, 0.95f + this.random.nextFloat() * 0.1f);
+            }
         }
     }
 
     private void tickFlight(int st) {
+        // 羽ばたきの拍（swim は 1.0 秒＝20 tick で 1 打）に合わせて羽音。滑空中は鳴らない
+        if (st == FLY && this.stateTimer % 20 == 4) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.7f, 0.85f + this.random.nextFloat() * 0.2f);
+        }
         // 羽ばたきと滑空を交互に（実物: 主に滑翔して、ゆっくりとした羽ばたきを交える）
         if (--this.flightModeTimer <= 0) {
             boolean toGlide = st == FLY;
@@ -226,8 +247,117 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
                 && this.getDeltaMovement().horizontalDistanceSqr() < 0.0004) {
             setState(HOVER);
         }
-        if (--this.restCooldown <= 0 && wantsToRest()) {
-            beginDive();
+        if (--this.restCooldown <= 0) {
+            // ⚠ 3 回に 1 回は浜へ（実物は陸が下手なので、水面で休むほうを多く）
+            if (this.random.nextInt(3) == 0 && wantsToLand()) {
+                beginLanding();
+            } else if (wantsToRest()) {
+                beginDive();
+            } else {
+                this.restCooldown = 200;
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- 浜へ降りる
+
+    /** 20 ブロック以内に、空が見えて水が近い砂か草の地面が在れば、その点を持つ。 */
+    private boolean wantsToLand() {
+        if (this.level().getNearestPlayer(this, 16.0) != null) {
+            return false;
+        }
+        Level level = this.level();
+        BlockPos here = this.blockPosition();
+        for (int i = 0; i < 8; i++) {
+            int x = here.getX() + this.random.nextInt(41) - 20;
+            int z = here.getZ() + this.random.nextInt(41) - 20;
+            int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            BlockPos ground = new BlockPos(x, top - 1, z);
+            BlockState gs = level.getBlockState(ground);
+            boolean beachy = gs.is(BlockTags.SAND) || gs.is(Blocks.GRASS_BLOCK) || gs.is(Blocks.GRAVEL);
+            if (!beachy || !level.getFluidState(ground).isEmpty()) {
+                continue;
+            }
+            boolean waterNear = false;
+            for (int dx = -6; dx <= 6 && !waterNear; dx += 3) {
+                for (int dz = -6; dz <= 6; dz += 3) {
+                    int t2 = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x + dx, z + dz);
+                    if (level.getFluidState(new BlockPos(x + dx, t2 - 1, z + dz)).is(FluidTags.WATER)) {
+                        waterNear = true;
+                        break;
+                    }
+                }
+            }
+            if (waterNear) {
+                this.shoreTarget = new BlockPos(x, top, z);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void beginLanding() {
+        setState(LAND);
+        BlockPos t = this.shoreTarget;
+        this.getNavigation().moveTo(t.getX() + 0.5, t.getY() + 3.0, t.getZ() + 0.5, 1.0);
+    }
+
+    private void tickLanding() {
+        BlockPos t = this.shoreTarget;
+        if (t == null) {
+            setState(FLY);
+            return;
+        }
+        double dx = t.getX() + 0.5 - this.getX();
+        double dz = t.getZ() + 0.5 - this.getZ();
+        double dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 2.5 || this.stateTimer > 120) {
+            // 真上に来たら（か、時間切れなら）そのまま降りる
+            this.getNavigation().stop();
+            Vec3 v = dist > 0.2 ? new Vec3(dx / dist * 0.08, -0.18, dz / dist * 0.08) : new Vec3(0.0, -0.18, 0.0);
+            this.setDeltaMovement(v);
+            this.setNoGravity(false);
+            if (this.onGround() || this.getY() <= t.getY() + 0.05) {
+                setState(STAND);
+                this.shoreTime = 200 + this.random.nextInt(500);
+                this.setDeltaMovement(Vec3.ZERO);
+            }
+        }
+        if (this.stateTimer > 400 || this.isInWater()) {
+            beginTakeoff();
+        }
+    }
+
+    private void tickOnShore(int st) {
+        this.setNoGravity(false);
+        this.getNavigation().stop();
+        Player near = this.level().getNearestPlayer(this, 8.0);
+        boolean disturbed = near != null && !near.isSpectator() && !near.isCreative();
+        if (disturbed || this.stateTimer > this.shoreTime || this.isInWater()) {
+            beginTakeoff();
+            return;
+        }
+        if (st == STAND) {
+            this.setDeltaMovement(this.getDeltaMovement().multiply(0.6, 1.0, 0.6));
+            if (this.stateTimer > 60 && this.random.nextInt(80) == 0) {
+                this.walkYaw = this.getYRot() + (this.random.nextFloat() - 0.5f) * 120.0f;
+                this.walkTime = 40 + this.random.nextInt(50);
+                int keep = this.shoreTime - this.stateTimer;
+                setState(WALK);
+                this.shoreTime = keep;
+            }
+            return;
+        }
+        // WALK: 向きをゆっくり合わせて、その向きへ歩く（よちよち。速さは飛ぶときの 1/8）
+        float yaw = net.minecraft.util.Mth.approachDegrees(this.getYRot(), this.walkYaw, 4.0f);
+        this.setYRot(yaw);
+        this.yBodyRot = yaw;
+        Vec3 fwd = Vec3.directionFromRotation(0.0f, yaw).multiply(1.0, 0.0, 1.0).normalize().scale(0.045);
+        this.setDeltaMovement(fwd.x, this.getDeltaMovement().y, fwd.z);
+        if (this.horizontalCollision || this.stateTimer > this.walkTime) {
+            int keep = this.shoreTime - this.stateTimer;
+            setState(STAND);
+            this.shoreTime = Math.max(60, keep);
         }
     }
 
@@ -277,6 +407,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     private void tickTakeoff() {
         this.setNoGravity(true);
+        if (this.stateTimer == 1 || this.stateTimer == 15) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 1.2f, 0.9f + this.random.nextFloat() * 0.2f);
+        }
         Vec3 forward = this.getLookAngle().multiply(1.0, 0.0, 1.0).normalize();
         double up = this.stateTimer < 12 ? 0.04 : 0.16;
         this.setDeltaMovement(forward.scale(0.22).add(0.0, up, 0.0));
@@ -434,7 +567,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         RawAnimation anim = switch (getState()) {
             case GLIDE -> ANIM_GLIDE;
             case HOVER -> ANIM_HOVER;
-            case DIVE -> ANIM_DIVE;
+            case DIVE, LAND -> ANIM_DIVE;
             case PADDLE -> ANIM_PADDLE;
             case SLEEP -> ANIM_SLEEP;
             case TAKEOFF -> ANIM_TAKEOFF;
