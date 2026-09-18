@@ -9,7 +9,7 @@
 
 | 何 | どこ | 誰が作るか |
 | - | - | - |
-| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | **mc-model-kit**（`entities/shearwater/`）。`ship_to_mod.py` が写す。ここでは手で触らない |
+| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | 手元の模型作りの道具 mc-model-kit（未公開）。その `ship_to_mod.py` が写す。ここでは手で触らない |
 | 生き物の中身（状態・AI・湧き） | `src/main/java/net/erutobusiness/erutosmobs/entity/ShearwaterEntity.java` | この MOD |
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
@@ -29,12 +29,12 @@
 
 ## 建て方
 
-```
+```bat
 set JAVA_HOME=<JDK 17>
 gradlew build
 ```
 
-`build/libs/erutosmobs-<版>.jar` ができる。サーバと全員のクライアントに GeckoLib が要る（世界 3 には入っている）。
+`build/libs/erutosmobs-<版>.jar` ができる。サーバと全員のクライアントに GeckoLib 4 が要る。
 
 ## 参考にしたもの
 
