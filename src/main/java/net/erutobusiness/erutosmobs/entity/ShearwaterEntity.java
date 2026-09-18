@@ -1,7 +1,12 @@
 package net.erutobusiness.erutosmobs.entity;
 
+import net.erutobusiness.erutosmobs.ErutosMobsConfig;
 import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -134,10 +139,83 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (!level.getFluidState(pos).is(FluidTags.WATER) || !level.canSeeSky(pos)) {
             return false;
         }
-        if (random.nextInt(25) != 0) {
+        int oneIn = ErutosMobsConfig.SHEARWATER_SPAWN_ONE_IN.get();
+        if (oneIn > 1 && random.nextInt(oneIn) != 0) {
             return false;
         }
-        return level.getEntitiesOfClass(ShearwaterEntity.class, new AABB(pos).inflate(192.0)).isEmpty();
+        double minDist = ErutosMobsConfig.SHEARWATER_MIN_DISTANCE.get();
+        return minDist <= 0
+                || level.getEntitiesOfClass(ShearwaterEntity.class, new AABB(pos).inflate(minDist)).isEmpty();
+    }
+
+    // ---------------------------------------------------------------- 消え方・見え方・大きさ
+
+    /**
+     * 伝説なので、水の生き物の既定（128 ブロックで即消える）より粘る。
+     * 全員が `despawnDistance`（既定 256）より遠いときだけ消える。近づいて追える距離で消えない。
+     */
+    @Override
+    public boolean removeWhenFarAway(double distSqr) {
+        double d = ErutosMobsConfig.SHEARWATER_DESPAWN_DISTANCE.get();
+        return distSqr > d * d;
+    }
+
+    /**
+     * 描画の当たり判定を翼の分だけ広げる（0.6 倍で翼幅 約 12 ブロック）。
+     * これが無いと、当たり判定（幅 3）が画面の外に出た瞬間に翼ごと消える。
+     */
+    @Override
+    public AABB getBoundingBoxForCulling() {
+        return this.getBoundingBox().inflate(6.5, 2.5, 6.5);
+    }
+
+    @Override
+    protected float getStandingEyeHeight(Pose pose, EntityDimensions dimensions) {
+        return dimensions.height * 0.72f;
+    }
+
+    @Override
+    protected float getSoundVolume() {
+        return 1.4f;
+    }
+
+    @Override
+    public boolean canChangeDimensions() {
+        return false;
+    }
+
+    @Override
+    public boolean isInvulnerableTo(DamageSource source) {
+        return source.is(DamageTypeTags.IS_DROWNING) || source.is(DamageTypeTags.IS_FALL)
+                || super.isInvulnerableTo(source);
+    }
+
+    // ---------------------------------------------------------------- 保存
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        tag.putInt("ShearwaterState", getState());
+        tag.putInt("RestCooldown", this.restCooldown);
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        int st = tag.getInt("ShearwaterState");
+        // ⚠ 途中の動き（降下・離陸・着地）は保存しない。飛んでいる状態か浮いている状態へ丸める
+        if (st == PADDLE || st == SLEEP) {
+            setState(st);
+            this.setNoGravity(false);
+        } else if (st == STAND || st == WALK) {
+            setState(STAND);
+            this.setNoGravity(false);
+            this.shoreTime = 100;
+        } else {
+            setState(FLY);
+            this.setNoGravity(true);
+        }
+        this.restCooldown = Math.max(200, tag.getInt("RestCooldown"));
     }
 
     // ---------------------------------------------------------------- 骨組み

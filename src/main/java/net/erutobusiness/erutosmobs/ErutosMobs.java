@@ -11,7 +11,9 @@ import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.event.entity.SpawnPlacementRegisterEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
 /**
@@ -32,6 +34,7 @@ public class ErutosMobs {
         bus.addListener(this::onAttributes);
         bus.addListener(this::onSpawnPlacements);
         bus.addListener(this::onCreativeTab);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ErutosMobsConfig.SPEC, "erutosmobs-common.toml");
     }
 
     private void onAttributes(EntityAttributeCreationEvent event) {
