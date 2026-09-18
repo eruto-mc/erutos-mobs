@@ -1,0 +1,8 @@
+build/
+run/
+run-server/
+.gradle/
+libs/*.jar
+bin/
+.idea/
+*.iml

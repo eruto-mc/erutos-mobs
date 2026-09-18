@@ -1,0 +1,18 @@
+{
+  "shearwater_cry": {
+    "subtitle": "subtitles.erutosmobs.shearwater_cry",
+    "sounds": ["erutosmobs:shearwater_cry_0", "erutosmobs:shearwater_cry_1"]
+  },
+  "shearwater_hurt": {
+    "subtitle": "subtitles.erutosmobs.shearwater_hurt",
+    "sounds": ["erutosmobs:shearwater_hurt_0"]
+  },
+  "shearwater_death": {
+    "subtitle": "subtitles.erutosmobs.shearwater_death",
+    "sounds": ["erutosmobs:shearwater_death_0"]
+  },
+  "shearwater_flap": {
+    "subtitle": "subtitles.erutosmobs.shearwater_flap",
+    "sounds": ["erutosmobs:shearwater_flap_0"]
+  }
+}

@@ -1,0 +1,35 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+issueTrackerURL="https://github.com/eruto-mc/erutos-mobs/issues"
+
+[[mods]]
+modId="erutosmobs"
+version="${file.jarVersion}"
+displayName="Eruto's Mobs"
+authors="erutobusiness"
+description='''
+Creatures of the storm side. The first one is the Shearwater: a legendary seabird that
+glides over the ocean, rests on the surface, sleeps at night on the water and needs a
+running start to take off. Models and animations are built with mc-model-kit and played
+through GeckoLib.
+'''
+
+[[dependencies.erutosmobs]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.erutosmobs]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.20.2)"
+    ordering="NONE"
+    side="BOTH"
+[[dependencies.erutosmobs]]
+    modId="geckolib"
+    mandatory=true
+    versionRange="[4.4,)"
+    ordering="AFTER"
+    side="BOTH"

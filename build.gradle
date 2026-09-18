@@ -1,0 +1,52 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+}
+
+version = '0.1.0'
+group = 'net.erutobusiness'
+base { archivesName = 'erutosmobs' }
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            mods { erutosmobs { source sourceSets.main } }
+        }
+        server {
+            workingDirectory project.file('run-server')
+            property 'forge.logging.console.level', 'info'
+            args '--nogui'
+            mods { erutosmobs { source sourceSets.main } }
+        }
+    }
+}
+
+repositories {
+    // GeckoLib（サーバに 4.8.4 が入っている。動きは GeckoLib の JSON で持つ）
+    maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
+    implementation fg.deobf("software.bernie.geckolib:geckolib-forge-1.20.1:${geckolib_version}")
+}
+
+jar {
+    manifest {
+        attributes([
+            'Specification-Title'   : 'erutosmobs',
+            'Specification-Version' : '1',
+            'Implementation-Title'  : "Eruto's Mobs",
+            'Implementation-Version': project.version,
+        ])
+    }
+}
+
+jar.finalizedBy('reobfJar')
