@@ -74,9 +74,15 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     private static final EntityDataAccessor<Integer> STATE =
             SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
+    /** 滑空の傾き: −1 左へ、0 水平、+1 右へ（向きの変化から決める） */
+    private static final EntityDataAccessor<Integer> BANK =
+            SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
+    private float bankFilter;
 
     private static final RawAnimation ANIM_FLY = RawAnimation.begin().thenLoop("animation.shearwater.swim");
     private static final RawAnimation ANIM_GLIDE = RawAnimation.begin().thenLoop("animation.shearwater.glide");
+    private static final RawAnimation ANIM_GLIDE_L = RawAnimation.begin().thenLoop("animation.shearwater.glide_bank_l");
+    private static final RawAnimation ANIM_GLIDE_R = RawAnimation.begin().thenLoop("animation.shearwater.glide_bank_r");
     private static final RawAnimation ANIM_HOVER = RawAnimation.begin().thenLoop("animation.shearwater.hover");
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.shearwater.idle");
     private static final RawAnimation ANIM_DIVE = RawAnimation.begin().thenPlayAndHold("animation.shearwater.dive");
@@ -224,6 +230,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     protected void defineSynchedData() {
         super.defineSynchedData();
         this.entityData.define(STATE, FLY);
+        this.entityData.define(BANK, 0);
     }
 
     @Override
@@ -311,9 +318,16 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     }
 
     private void tickFlight(int st) {
-        // 羽ばたきの拍（swim は 1.0 秒＝20 tick で 1 打）に合わせて羽音。滑空中は鳴らない
-        if (st == FLY && this.stateTimer % 20 == 4) {
-            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.7f, 0.85f + this.random.nextFloat() * 0.2f);
+        // 羽音。羽ばたきは 4 Hz（1 打 5 tick。一次: Harada ら J Exp Biol 2026）なので 2 打に 1 回、小さく
+        if (st == FLY && this.stateTimer % 10 == 2) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.45f, 1.05f + this.random.nextFloat() * 0.2f);
+        }
+        // 傾き（bank）: 向きの変化から左右を決め、滑空の左右 2 本を選ばせる
+        float dyaw = net.minecraft.util.Mth.wrapDegrees(this.getYRot() - this.yRotO);
+        this.bankFilter = this.bankFilter * 0.85f + dyaw * 0.15f;
+        int bank = this.bankFilter > 0.6f ? 1 : (this.bankFilter < -0.6f ? -1 : 0);
+        if (bank != this.entityData.get(BANK)) {
+            this.entityData.set(BANK, bank);
         }
         // 羽ばたきと滑空を交互に（実物: 主に滑翔して、ゆっくりとした羽ばたきを交える）
         if (--this.flightModeTimer <= 0) {
@@ -549,7 +563,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             return false;
         }
         this.surfaceY = top;
-        double want = top - 0.45;                      // 胴が水面に沈む分
+        double want = top - 0.25;                      // 胴が水面に沈む分（軽く高く浮く）
         double y = this.getY() + (want - this.getY()) * 0.3;
         Vec3 v = this.getDeltaMovement();
         this.setDeltaMovement(v.x * 0.9, 0.0, v.z * 0.9);
@@ -642,8 +656,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     }
 
     private PlayState mainAnimation(AnimationState<ShearwaterEntity> state) {
+        int bank = this.entityData.get(BANK);
         RawAnimation anim = switch (getState()) {
-            case GLIDE -> ANIM_GLIDE;
+            case GLIDE -> bank < 0 ? ANIM_GLIDE_L : (bank > 0 ? ANIM_GLIDE_R : ANIM_GLIDE);
             case HOVER -> ANIM_HOVER;
             case DIVE, LAND -> ANIM_DIVE;
             case PADDLE -> ANIM_PADDLE;
@@ -711,7 +726,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
                 int z = this.bird.blockPosition().getZ() + dz;
                 int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
                 boolean water = level.getFluidState(new BlockPos(x, top - 1, z)).is(FluidTags.WATER);
-                int y = top + 6 + random.nextInt(13);
+                // 波すれすれ（1.5〜7 上）が基本。4 回に 1 回は舞い上がる（10〜22）
+                int y = random.nextInt(4) == 0 ? top + 10 + random.nextInt(13) : top + 2 + random.nextInt(6);
                 if (water || i == 9) {
                     return new Vec3(x + 0.5, y, z + 0.5);
                 }
