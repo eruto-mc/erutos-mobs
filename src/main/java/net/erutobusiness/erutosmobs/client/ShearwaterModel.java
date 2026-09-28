@@ -2,6 +2,7 @@ package net.erutobusiness.erutosmobs.client;
 
 import net.erutobusiness.erutosmobs.ErutosMobs;
 import net.erutobusiness.erutosmobs.entity.ShearwaterEntity;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import software.bernie.geckolib.constant.DataTickets;
@@ -35,6 +36,18 @@ public class ShearwaterModel extends GeoModel<ShearwaterEntity> {
     @Override
     public ResourceLocation getTextureResource(ShearwaterEntity animatable) {
         return TEXTURE;
+    }
+
+    /**
+     * ⚠⚠ 裏を向いた面を描かない描き方（2026-09-28・ユーザー「遠くから見るとチラついたけど、近くから見るとチラつかないね」）。
+     * ⚠ GeckoLib の既定は裏も描く `entityCutoutNoCull`（4.8.4 のソース `GeoModel.getRenderType`）。羽の板は表と裏が
+     *   0.1 しか離れておらず（押し出し 0.05）、奥行きの細かさが距離の 2 乗で粗くなる遠くでは、上面の紺と下面の白が
+     *   取り合っていた（近い面 0.05・24 bit で見積もると 55 ブロックより先）。裏を描かなければ取り合う相手が無い。
+     *   板は厚み 0 でも上と下の 2 面を持つので、どちらから見ても 1 面は描かれる。
+     */
+    @Override
+    public RenderType getRenderType(ShearwaterEntity animatable, ResourceLocation texture) {
+        return RenderType.entityCutout(texture);
     }
 
     @Override
