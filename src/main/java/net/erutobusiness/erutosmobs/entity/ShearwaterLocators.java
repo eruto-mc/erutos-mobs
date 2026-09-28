@@ -6,17 +6,17 @@ package net.erutobusiness.erutosmobs.entity;
  * yaw θ の世界へは {@link #toWorld} を使う。
  */
 public final class ShearwaterLocators {
-    public static final double[] GLIDE_TIP_L = {6.136, 2.354, 0.453};
-    public static final double[] GLIDE_TIP_R = {-6.082, 2.654, -0.188};
-    public static final double[] BANK_L_TIP_L = {6.181, 0.053, -0.276};
-    public static final double[] BANK_L_TIP_R = {-4.586, 5.400, 0.354};
-    public static final double[] BANK_R_TIP_L = {5.202, 4.459, 1.049};
-    public static final double[] BANK_R_TIP_R = {-6.034, -0.409, 0.237};
+    public static final double[] GLIDE_TIP_L = {5.901, 2.222, 0.152};
+    public static final double[] GLIDE_TIP_R = {-5.824, 2.511, -0.463};
+    public static final double[] BANK_L_TIP_L = {5.882, 0.014, -0.543};
+    public static final double[] BANK_L_TIP_R = {-4.462, 5.151, 0.062};
+    public static final double[] BANK_R_TIP_L = {5.065, 4.252, 0.731};
+    public static final double[] BANK_R_TIP_R = {-5.679, -0.440, -1.126};
     public static final double[] FOOT_L = {0.202, 0.052, 0.480};
     public static final double[] FOOT_R = {-0.203, 0.052, 0.480};
     public static final double[] BODY_CENTER = {0.012, 0.975, -0.300};
     public static final double[] BODY_BOTTOM_Y = {0.667, 0.000, 0.000};
-    public static final double[][] TRAILING_EDGE = {{0.722, 1.310, -0.511}, {1.447, 1.381, -0.448}, {2.523, 1.569, -0.181}, {3.925, 1.877, 0.293}, {5.326, 2.185, 0.767}, {-0.655, 1.344, -0.583}, {-1.378, 1.451, -0.596}, {-2.465, 1.692, -0.443}, {-3.892, 2.069, -0.117}, {-5.319, 2.447, 0.209}};
+    public static final double[][] TRAILING_EDGE = {{0.731, 1.330, -0.397}, {1.094, 1.365, -0.441}, {1.451, 1.400, -0.410}, {2.353, 1.536, -0.271}, {2.988, 1.650, -0.203}, {3.728, 1.787, -0.104}, {4.916, 2.019, -0.070}, {-0.675, 1.365, -0.471}, {-1.029, 1.418, -0.552}, {-1.385, 1.470, -0.558}, {-2.289, 1.650, -0.514}, {-2.921, 1.795, -0.513}, {-3.660, 1.969, -0.491}, {-4.832, 2.259, -0.581}};
 
     /** yaw 0 の点を、体の向き yawDeg（Minecraft の yBodyRot）の世界の差分へ回す。 */
     public static double[] toWorld(double[] p, float yawDeg) {

@@ -10,11 +10,11 @@
 
 | 何 | どこ | 誰が作るか |
 | - | - | - |
-| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | 手元の模型作りの道具 mc-model-kit（未公開）。その `ship_to_mod.py` が写す。ここでは手で触らない |
+| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | 手元の模型作りの道具 mc-model-kit（未公開）。その `ship_to_mod.py` が写す。ここでは手で触らない。翼は羽 1 枚ずつで組む（前縁の腕・雨覆 2 段・次列風切 7 枚・初列風切 9 枚。初列は外ほど長く開いて翼端を尖らせる）。羽の板はすべて水平で、どの動きでも板どうしが交わらないことを書き出しのときに確かめる |
 | 生き物の中身（状態・AI・湧き） | `src/main/java/net/erutobusiness/erutosmobs/entity/ShearwaterEntity.java` | この MOD |
 | 飛び方 | `entity/ShearwaterMoveControl.java`（向き・速さ・上下を自分で持つ）・`entity/ShearPassGoal.java`（波を切る） | この MOD |
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
-| 光る層・粒子 | `client/ShearwaterGlowLayer.java`・`client/FeatherParticle.java`・`client/MistParticle.java`・`entity/ShearwaterEffects.java` | この MOD。光る部分の絵（`textures/entity/shearwater_glow.png`）と羽根の絵（`textures/particle/`）は mc-model-kit が塗る |
+| 光る層・粒子 | `client/ShearwaterGlowLayer.java`・`client/{Feather,Mist,Spray,Spark}Particle.java`・`entity/ShearwaterEffects.java` | この MOD。光る部分の絵（`textures/entity/shearwater_glow.png`）と羽根の絵（`textures/particle/`）は mc-model-kit が塗る。粒子の大きさは「実物 × 11」（翼幅 12 ブロックは実物 1.1 m の約 11 倍。1 ブロック ＝ 1 m）で決め、バニラの絵（しぶき・光の点）も大きさを持ち直して使う |
 | 粒子の出どころ | `entity/ShearwaterLocators.java`（翼端・足・翼の後縁の位置） | mc-model-kit が模型から計算して書く。手で直さない |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
 | 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声） | 手元の音の道具 wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
@@ -38,13 +38,13 @@
 | - | - | - |
 | 光る層 | いつも（昼はほぼ消える） | 琥珀色の縁・目・顔の泡の線が暗さに応じて光る（昼 0.06 → 夜 0.8）。雷雨でさらに強まり、ときどき瞬く |
 | 鳴いた光 | 鳴くたび | 鳴きの 1.2 秒の間、光が一度強まる |
-| 帯電 | 雷を受けたとき・嵐で雷を呼んだとき（1 分） | 雷で傷まず燃えず、体力が 10 戻る。光が最大近くになり、翼の後縁と翼端から火花が散る |
+| 帯電 | 雷を受けたとき・嵐で雷を呼んだとき（1 分） | 雷で傷まず燃えず、体力が 10 戻る。光が最大近くになり、翼の後縁に沿って稲妻の火花（長さ 1〜3 ブロックの折れ線）が走る |
 | 嵐の雷呼び | 雷雨の中を飛んでいる間、平均 90 秒に 1 回 | 見た目だけの雷（火も傷も無い）を自分へ落とし、帯電する |
-| 風の筋 | 速く滑空しているとき | 両方の翼端から淡い白の筋が後ろへ引かれる |
-| 波を切るしぶき | 傾いて水面すれすれを滑るとき | 下がった翼端が水面に触れた所から、しぶきと水の音 |
-| 足の水しぶき・水滴 | 水面から飛び立つとき | 助走の足が水を蹴る拍にしぶき。飛び立ったあと 5 秒、翼の後縁から水滴が落ちる |
-| 航跡・着水 | 水面を漕ぐとき・降りて水に入った瞬間 | 尾の後ろに航跡。着水は大きなしぶきと泡 |
-| 羽根 | 殴られたとき（10 枚）・死んだとき（30 枚） | 嵐色の羽根がゆっくり揺れながら舞い落ちる |
+| 風の筋 | 速く滑空しているとき | 両方の翼端から、幅 0.6〜1.6 ブロックの淡い白の帯が途切れずに後ろへ引かれる |
+| 波を切るしぶき | 傾いて水面すれすれを滑るとき | 下がった翼端が水面に触れた所から、2〜2.5 ブロック跳ね上がるしぶき（幅 0.7〜1.4）と水の音 |
+| 足の水しぶき・水滴 | 水面から飛び立つとき | 助走の足が水を蹴る拍に幅 1.2 ほどのしぶき。飛び立ったあと 5 秒、翼の後縁から水滴が落ちる |
+| 航跡・着水 | 水面を漕ぐとき・降りて水に入った瞬間 | 胴の後ろへ八の字に開く航跡（幅 6〜8）。着水は半径 1〜3.5 の大きなしぶきと泡 |
+| 羽根 | 殴られたとき（体の羽 12・風切羽 2）・死んだとき（30・6） | 嵐色の羽根がゆっくり揺れながら舞い落ちる。体の羽は幅 0.5〜0.8、風切羽は 1.6〜2.2 ブロック |
 
 ## 設定
 
