@@ -1,11 +1,15 @@
 package net.erutobusiness.erutosmobs.entity;
 
 import net.erutobusiness.erutosmobs.ErutosMobsConfig;
+import net.erutobusiness.erutosmobs.registry.ModParticles;
 import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.DamageTypeTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityDimensions;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -24,7 +28,6 @@ import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
@@ -36,6 +39,8 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -78,6 +83,24 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> BANK =
             SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
     private float bankFilter;
+    /**
+     * 帯電（雷を受けた・嵐で雷を呼んだ後の 1 分）。光る層が最大近くまで上がり、翼から火花が出る。
+     * 残りの tick はサーバだけが持ち、クライアントへは入り切りだけを送る（毎 tick 送らない）。
+     */
+    private static final EntityDataAccessor<Boolean> CHARGED =
+            SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final int CHARGE_TICKS = 1200;
+    private int chargeTicks;
+    /** 鳴いたことをクライアントへ知らせる番号（光る層が一瞬強まる）。バニラの使う番号（〜67）と重ならない値 */
+    private static final byte EVENT_CRY = (byte) 101;
+    /** 鳴きの動き（cry）の長さ＝1.2 秒 */
+    private static final int CRY_TICKS = 24;
+    private int cryGlowTicks;
+    private final ShearwaterEffects effects = new ShearwaterEffects(this);
+    /** 滑空を保たせる残り（{@link ShearPassGoal} が波を切る間、羽ばたき・休みへ切り替えない） */
+    private int glideHold;
+    /** 次に波を切ってよいまでの tick（{@link ShearPassGoal}） */
+    int shearCooldown = 600;
     /**
      * 上り下りの傾き（度・正で上り＝鼻先が上）。クライアントだけで、位置の変化から決める（{@link #tick}）。
      * 描画（ShearwaterModel）が胴の回転に足す。ルギアの `q.pitch_tilt`（±45° で止める）と、
@@ -128,7 +151,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     public ShearwaterEntity(EntityType<? extends PathfinderMob> type, Level level) {
         super(type, level);
-        this.moveControl = new FlyingMoveControl(this, 20, true);
+        this.moveControl = new ShearwaterMoveControl(this);
         this.setNoGravity(true);
         this.setPathfindingMalus(BlockPathTypes.WATER, 0.0f);
         this.setPathfindingMalus(BlockPathTypes.DANGER_FIRE, -1.0f);
@@ -215,6 +238,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         super.addAdditionalSaveData(tag);
         tag.putInt("ShearwaterState", getState());
         tag.putInt("RestCooldown", this.restCooldown);
+        tag.putInt("ChargeTicks", this.chargeTicks);
+        tag.putInt("ShearCooldown", this.shearCooldown);
     }
 
     @Override
@@ -233,7 +258,15 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             setState(FLY);
             this.setNoGravity(true);
         }
-        this.restCooldown = Math.max(200, tag.getInt("RestCooldown"));
+        // ⚠ /summon は中身の無い NBT でも読みに来る。無いときは既定のまま（0 → 200 に丸めると、召喚して 10 秒で降りた）
+        if (tag.contains("RestCooldown")) {
+            this.restCooldown = Math.max(200, tag.getInt("RestCooldown"));
+        }
+        this.chargeTicks = Mth.clamp(tag.getInt("ChargeTicks"), 0, CHARGE_TICKS);
+        if (tag.contains("ShearCooldown")) {
+            this.shearCooldown = Math.max(0, tag.getInt("ShearCooldown"));
+        }
+        this.entityData.set(CHARGED, this.chargeTicks > 0);
     }
 
     // ---------------------------------------------------------------- 骨組み
@@ -243,6 +276,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         super.defineSynchedData();
         this.entityData.define(STATE, FLY);
         this.entityData.define(BANK, 0);
+        this.entityData.define(CHARGED, false);
     }
 
     @Override
@@ -256,6 +290,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     protected void registerGoals() {
+        this.goalSelector.addGoal(1, new ShearPassGoal(this));
         this.goalSelector.addGoal(2, new SeaWanderGoal(this));
         this.goalSelector.addGoal(5, new LookAtPlayerGoal(this, Player.class, 24.0f));
         this.goalSelector.addGoal(6, new RandomLookAroundGoal(this));
@@ -282,7 +317,16 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (getState() != state) {
             this.entityData.set(STATE, state);
             this.stateTimer = 0;
+            if (state != FLY && state != GLIDE && state != HOVER && state != LAND
+                    && this.moveControl instanceof ShearwaterMoveControl mc) {
+                mc.halt();
+            }
         }
+    }
+
+    /** 波を切っている最中か（{@link ShearPassGoal}。このときは水面すれすれまで降りてよい） */
+    public boolean isShearing() {
+        return this.glideHold > 0;
     }
 
     public boolean isFlying() {
@@ -311,7 +355,76 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
                 target = net.minecraft.util.Mth.clamp((float) Math.toDegrees(Math.atan2(dy, h)), -MAX_TILT, MAX_TILT);
             }
             this.tilt += (target - this.tilt) * 0.15f;
+            if (this.cryGlowTicks > 0) {
+                this.cryGlowTicks--;
+            }
+            if (this.isAlive()) {
+                this.effects.tick();
+            }
         }
+    }
+
+    // ---------------------------------------------------------------- 表現（光・雷・鳴き）
+
+    public int getBank() {
+        return this.entityData.get(BANK);
+    }
+
+    public boolean isCharged() {
+        return this.entityData.get(CHARGED);
+    }
+
+    /** 鳴いた直後の光の上乗せ（0〜0.6）。鳴きの動きの 1.2 秒で山を描く。クライアントだけで意味を持つ */
+    public float cryGlow(float partialTick) {
+        if (this.cryGlowTicks <= 0) {
+            return 0.0f;
+        }
+        float p = Mth.clamp((CRY_TICKS - this.cryGlowTicks + partialTick) / CRY_TICKS, 0.0f, 1.0f);
+        return 0.6f * Mth.sin(p * Mth.PI);
+    }
+
+    @Override
+    public void handleEntityEvent(byte id) {
+        if (id == EVENT_CRY) {
+            this.cryGlowTicks = CRY_TICKS;
+        } else {
+            super.handleEntityEvent(id);
+        }
+    }
+
+    /** 鳴く（動き・声・光の合図を一度に）。サーバで呼ぶ */
+    private void cry() {
+        triggerAnim("main", "cry");
+        this.playSound(ModSounds.SHEARWATER_CRY.get(), 2.0f, 0.95f + this.random.nextFloat() * 0.1f);
+        this.level().broadcastEntityEvent(this, EVENT_CRY);
+    }
+
+    /** 帯電させる。入ったばかりでなければ鳴き、傷が少し癒える（嵐の主は雷で力を得る） */
+    private void charge() {
+        boolean fresh = this.chargeTicks < CHARGE_TICKS - 40;   // 1 本の雷は数 tick 続けて当たるので、2 回目以降は数えない
+        this.chargeTicks = CHARGE_TICKS;
+        this.entityData.set(CHARGED, true);
+        if (fresh) {
+            this.heal(10.0f);
+            cry();
+            this.cryCooldown = Math.max(this.cryCooldown, 400);
+        }
+    }
+
+    /**
+     * 雷を受けても傷まず、燃えず、帯電する（バニラは火を付けて 5 の傷。`Entity.thunderHit`）。
+     * ⚠ 鳥が雷に当たるのは稀なので、嵐の中では自分で呼ぶ（{@link #customServerAiStep}）。
+     */
+    @Override
+    public void thunderHit(ServerLevel level, LightningBolt bolt) {
+        this.clearFire();
+        charge();
+    }
+
+    /** 時刻で見た夜（日の入り 13000〜日の出 23000）。空の暗さ（雨・雷雨で下がる）は見ない */
+    private boolean isNightTime() {
+        long t = this.level().getDayTime() % 24000L;
+        return t >= 13000L && t < 23000L;
     }
 
     public boolean isOnWater() {
@@ -337,13 +450,32 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             default -> setState(FLY);
         }
         // ⚠ 実物「ほとんど海上で鳴くことはないが、夜間の営巣地では鳴き声や翼の音で騒がしくなる」
-        //   （ja.wikipedia）。飛んでいる間は 4 回に 1 回だけ、浮いている・立っている・夜は毎回鳴く。
+        //   （ja.wikipedia）。飛んでいる間は 4 回に 1 回だけ、浮いている・立っている・夜・雷雨は毎回鳴く。
         if (--this.cryCooldown <= 0 && st != SLEEP && st != DIVE && st != TAKEOFF && st != LAND) {
             this.cryCooldown = 800 + this.random.nextInt(1600);
-            boolean quietAtSea = isFlying() && !this.level().isNight() && this.random.nextInt(4) != 0;
+            boolean loud = isNightTime() || this.level().isThundering();
+            boolean quietAtSea = isFlying() && !loud && this.random.nextInt(4) != 0;
             if (!quietAtSea) {
-                triggerAnim("main", "cry");
-                this.playSound(ModSounds.SHEARWATER_CRY.get(), 2.0f, 0.95f + this.random.nextFloat() * 0.1f);
+                cry();
+            }
+        }
+        // 帯電の残り
+        if (this.chargeTicks > 0 && --this.chargeTicks == 0) {
+            this.entityData.set(CHARGED, false);
+        }
+        // 嵐の主: 雷雨の中を飛んでいると、ときどき自分へ雷を呼ぶ（既定は 1 tick に 1/1800＝平均 90 秒に 1 回。
+        //   設定 `stormLightningOneIn`、0 で無し）。⚠ 見た目だけの雷（setVisualOnly）なので、火も付かず誰も傷まない
+        //   （`LightningBolt.tick` は visualOnly のとき当たり判定と着火を飛ばす）
+        int stormOneIn = ErutosMobsConfig.SHEARWATER_STORM_LIGHTNING_ONE_IN.get();
+        if (stormOneIn > 0 && st != DIVE && st != LAND && isFlying() && this.chargeTicks == 0
+                && this.level().isThundering() && this.random.nextInt(stormOneIn) == 0
+                && this.level().canSeeSky(this.blockPosition().above(2))) {
+            LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(this.level());
+            if (bolt != null) {
+                bolt.moveTo(this.getX(), this.getY() + 1.0, this.getZ());
+                bolt.setVisualOnly(true);
+                this.level().addFreshEntity(bolt);
+                charge();
             }
         }
     }
@@ -360,19 +492,40 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (bank != this.entityData.get(BANK)) {
             this.entityData.set(BANK, bank);
         }
-        // 羽ばたきと滑空を交互に（実物: 主に滑翔して、ゆっくりとした羽ばたきを交える）
-        if (--this.flightModeTimer <= 0) {
-            boolean toGlide = st == FLY;
-            setState(toGlide ? GLIDE : FLY);
-            this.flightModeTimer = toGlide ? 80 + this.random.nextInt(120) : 50 + this.random.nextInt(50);
+        if (this.shearCooldown > 0) {
+            this.shearCooldown--;
         }
-        if (this.stateTimer > 30 && this.getNavigation().isDone()
-                && this.getDeltaMovement().horizontalDistanceSqr() < 0.0004) {
-            setState(HOVER);
+        // 波を切っている間（ShearPassGoal）は滑空のまま。羽ばたき・止まる・休むへ切り替えない
+        if (this.glideHold > 0) {
+            this.glideHold--;
+            if (st != GLIDE) {
+                setState(GLIDE);
+            }
+            return;
+        }
+        // 羽ばたくか滑るか（実物: 主に滑翔して、ゆっくりとした羽ばたきを交える）。
+        // 上るとき・遅いときは羽ばたく。それ以外は滑空を基本に、5〜12 秒ごとに 2〜3 打だけ羽ばたく。
+        // 滑空へ移るのは打ち終わり（1 打 17 tick の区切り）で、翼を振り上げた途中では切らない
+        Vec3 v = this.getDeltaMovement();
+        boolean needPower = v.y > 0.035 || v.horizontalDistance() < 0.15;
+        this.flightModeTimer--;
+        if (st == GLIDE) {
+            // 滑空は最低 1.5 秒続ける（0.5 秒で羽ばたきへ戻ると、翼を広げ切らないうちに打ち始めてちらつく）。
+            // ただしほとんど止まりかけ（0.1 未満）なら、すぐ羽ばたく
+            boolean mustFlap = v.horizontalDistance() < 0.1;
+            if ((needPower && (this.stateTimer > 30 || mustFlap)) || this.flightModeTimer <= 0) {
+                setState(FLY);
+                this.flightModeTimer = FLAP_TICKS * (2 + this.random.nextInt(2));
+            }
+        } else if (!needPower && this.flightModeTimer <= 0 && this.stateTimer % FLAP_TICKS == 0) {
+            setState(GLIDE);
+            this.flightModeTimer = 100 + this.random.nextInt(140);
         }
         if (--this.restCooldown <= 0) {
-            // ⚠ 3 回に 1 回は浜へ（実物は陸が下手なので、水面で休むほうを多く）
-            if (this.random.nextInt(3) == 0 && wantsToLand()) {
+            // ⚠ 3 回に 1 回は浜へ（実物は陸が下手なので、水面で休むほうを多く）。雷雨の間は休まない（嵐の主の出番）
+            if (this.level().isThundering()) {
+                this.restCooldown = 200;
+            } else if (this.random.nextInt(3) == 0 && wantsToLand()) {
                 beginLanding();
             } else if (wantsToRest()) {
                 beginDive();
@@ -421,8 +574,6 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     private void beginLanding() {
         setState(LAND);
-        BlockPos t = this.shoreTarget;
-        this.getNavigation().moveTo(t.getX() + 0.5, t.getY() + 3.0, t.getZ() + 0.5, 1.0);
     }
 
     private void tickLanding() {
@@ -434,9 +585,14 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         double dx = t.getX() + 0.5 - this.getX();
         double dz = t.getZ() + 0.5 - this.getZ();
         double dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 2.5 || this.stateTimer > 120) {
+        if (dist >= 2.5 && this.stateTimer <= 120) {
+            // 降りる点の 3 上へ向かう。曲がる半径があるので、行き過ぎたら輪を描いて戻ってくる
+            this.moveControl.setWantedPosition(t.getX() + 0.5, t.getY() + 3.0, t.getZ() + 0.5, 0.8);
+        } else {
             // 真上に来たら（か、時間切れなら）そのまま降りる
-            this.getNavigation().stop();
+            if (this.moveControl instanceof ShearwaterMoveControl mc) {
+                mc.halt();
+            }
             Vec3 v = dist > 0.2 ? new Vec3(dx / dist * 0.08, -0.18, dz / dist * 0.08) : new Vec3(0.0, -0.18, 0.0);
             this.setDeltaMovement(v);
             this.setNoGravity(false);
@@ -484,15 +640,14 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         }
     }
 
+    /** 止まって羽ばたく（餌を探す）。始めと終わりは {@link SeaWanderGoal} が決める。ここは羽音と、取り残されたときの戻りだけ */
     private void tickHover() {
-        if (this.stateTimer > 60 && (this.getDeltaMovement().horizontalDistanceSqr() > 0.002
-                || !this.getNavigation().isDone())) {
-            setState(FLY);
-            this.flightModeTimer = 100;
+        if (this.stateTimer % CLIMB_FLAP_TICKS == 2) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.7f, 0.85f + this.random.nextFloat() * 0.15f);
         }
-        if (this.stateTimer > 200) {
-            setState(GLIDE);
-            this.flightModeTimer = 120;
+        if (this.stateTimer > 160) {
+            setState(FLY);
+            this.flightModeTimer = FLAP_TICKS * 2;
         }
     }
 
@@ -511,12 +666,19 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             beginTakeoff();
             return;
         }
-        if (st == PADDLE && this.level().isNight() && this.stateTimer > 100) {
+        // 雷雨が来たら、眠っていても 5 秒で飛び立つ（嵐の主の出番）
+        if (this.level().isThundering() && this.stateTimer > 100) {
+            beginTakeoff();
+            return;
+        }
+        // ⚠ 眠る・起きるは時刻で決める。`Level.isNight()` は空の暗さで決まり、雷雨の昼も夜と数える
+        //   （2026-09-28 に、昼に固定した開発サーバで雷雨にしたら水面で眠った）
+        if (st == PADDLE && isNightTime() && this.stateTimer > 100) {
             setState(SLEEP);
             return;
         }
         if (st == SLEEP) {
-            if (this.level().isDay() && this.stateTimer > 200) {
+            if (!isNightTime() && this.stateTimer > 200) {
                 setState(PADDLE);
                 this.paddleTime = 200 + this.random.nextInt(400);
             }
@@ -580,13 +742,24 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     /** 真下の水面の高さ（水でなければ NaN）。 */
     private double surfaceBelow() {
-        BlockPos here = this.blockPosition();
-        int top = this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, here.getX(), here.getZ());
-        BlockPos water = new BlockPos(here.getX(), top - 1, here.getZ());
-        if (!this.level().getFluidState(water).is(FluidTags.WATER)) {
+        return seaSurfaceAt(this.level(), this.getBlockX(), this.getBlockZ());
+    }
+
+    /** (x, z) の一番上が水なら、その水のブロックの上面の高さ。水でなければ NaN。 */
+    static double seaSurfaceAt(Level level, int x, int z) {
+        int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        if (!level.getFluidState(new BlockPos(x, top - 1, z)).is(FluidTags.WATER)) {
             return Double.NaN;
         }
         return top;
+    }
+
+    /** 波を切る間、滑空を保たせる（{@link ShearPassGoal}）。 */
+    void holdGlide(int ticks) {
+        this.glideHold = ticks;
+        if (ticks > 0 && getState() == FLY) {
+            setState(GLIDE);
+        }
     }
 
     /** 水面に浮いたまま保つ。水が無ければ false。 */
@@ -631,8 +804,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     @Override
     public boolean hurt(DamageSource source, float amount) {
         boolean ok = super.hurt(source, amount);
-        if (ok && !this.level().isClientSide && this.isAlive()) {
+        if (ok && this.level() instanceof ServerLevel sl && this.isAlive()) {
             triggerAnim("main", "hurt");
+            // 嵐色の羽根が散る（タイヨウチョウは常に落とすが、こちらは殴られたときだけ）
+            sl.sendParticles(ModParticles.FEATHER.get(), this.getX(), this.getY() + 1.0, this.getZ(),
+                    10, 1.0, 0.4, 1.0, 0.02);
             int st = getState();
             if (st == PADDLE || st == SLEEP || st == DIVE) {
                 beginTakeoff();
@@ -644,8 +820,10 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     @Override
     public void die(DamageSource source) {
         super.die(source);
-        if (!this.level().isClientSide) {
+        if (this.level() instanceof ServerLevel sl) {
             triggerAnim("main", "faint");
+            sl.sendParticles(ModParticles.FEATHER.get(), this.getX(), this.getY() + 1.0, this.getZ(),
+                    30, 2.5, 0.6, 2.5, 0.04);
         }
     }
 
@@ -712,10 +890,21 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     // ---------------------------------------------------------------- 海の上を巡る
 
-    /** 海の上の点を選んで飛ぶ。水面の 6〜18 上。水面で休んでいる間は動かない。 */
+    /**
+     * 海の上を途切れずに巡る。行き先の 5 ブロック手前で次の行き先を選ぶので、空中で止まらない
+     * （前は着くたびに止まって 2〜6 秒待ち、そのたびに「止まる」の動きへ入っていた）。
+     * 行き先は前方寄り（±63°）の 14〜32 ブロック先で、水の上を選ぶ。高さは水面の 2〜7 上、4 回に 1 回は 10〜22 上。
+     * 着いたときに 8 回に 1 回だけ、その場で 2〜4 秒羽ばたいて止まる（餌を探す。平均 40 秒に 1 回ほど）。
+     */
     static class SeaWanderGoal extends Goal {
         private final ShearwaterEntity bird;
-        private int idle;
+        @Nullable
+        private Vec3 target;
+        private int legTime;
+        private int hoverTime;
+        /** 止まったあと 20 秒は止まらない（続けて止まると、行き先ごとに止まっていた前と同じに見える） */
+        private int hoverCooldown = 400;
+        private Vec3 hoverAt = Vec3.ZERO;
 
         SeaWanderGoal(ShearwaterEntity bird) {
             this.bird = bird;
@@ -724,46 +913,86 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
         @Override
         public boolean canUse() {
-            if (!this.bird.isFlying() || this.bird.getState() == DIVE || this.bird.getState() == TAKEOFF) {
-                return false;
-            }
-            if (!this.bird.getNavigation().isDone()) {
-                return false;
-            }
-            return ++this.idle > 20 + this.bird.random.nextInt(40);
+            int st = this.bird.getState();
+            return st == FLY || st == GLIDE || st == HOVER;
         }
 
         @Override
         public boolean canContinueToUse() {
-            return false;
+            return canUse();
         }
 
         @Override
         public void start() {
-            this.idle = 0;
-            Vec3 target = pickTarget();
-            if (target != null) {
-                double speed = this.bird.getState() == GLIDE ? 0.9 : 1.1;
-                this.bird.getNavigation().moveTo(target.x, target.y, target.z, speed);
+            this.target = null;
+            this.hoverTime = 0;
+        }
+
+        @Override
+        public boolean requiresUpdateEveryTick() {
+            return true;
+        }
+
+        @Override
+        public void tick() {
+            if (this.hoverTime > 0) {
+                this.bird.getMoveControl().setWantedPosition(this.hoverAt.x, this.hoverAt.y, this.hoverAt.z, 1.0);
+                if (--this.hoverTime == 0) {
+                    this.bird.setState(FLY);
+                    this.target = null;
+                }
+                return;
             }
+            this.legTime++;
+            this.hoverCooldown--;
+            boolean arrived = this.target != null && horizontalDistance(this.target) < 5.0;
+            if (this.target == null || arrived || this.legTime > 300 || this.bird.horizontalCollision) {
+                if (arrived && this.hoverCooldown <= 0 && this.bird.random.nextInt(8) == 0) {
+                    this.hoverCooldown = 400;
+                    this.hoverTime = 40 + this.bird.random.nextInt(41);
+                    this.hoverAt = this.bird.position();
+                    this.bird.setState(HOVER);
+                    return;
+                }
+                this.target = pickTarget();
+                this.legTime = 0;
+            }
+            if (this.target != null) {
+                this.bird.getMoveControl().setWantedPosition(this.target.x, this.target.y, this.target.z, 1.0);
+            }
+        }
+
+        private double horizontalDistance(Vec3 p) {
+            double dx = p.x - this.bird.getX();
+            double dz = p.z - this.bird.getZ();
+            return Math.sqrt(dx * dx + dz * dz);
         }
 
         @Nullable
         private Vec3 pickTarget() {
             Level level = this.bird.level();
             RandomSource random = this.bird.random;
-            for (int i = 0; i < 10; i++) {
-                int dx = random.nextInt(49) - 24;
-                int dz = random.nextInt(49) - 24;
-                int x = this.bird.blockPosition().getX() + dx;
-                int z = this.bird.blockPosition().getZ() + dz;
-                int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-                boolean water = level.getFluidState(new BlockPos(x, top - 1, z)).is(FluidTags.WATER);
-                // 波すれすれ（1.5〜7 上）が基本。4 回に 1 回は舞い上がる（10〜22）
-                int y = random.nextInt(4) == 0 ? top + 10 + random.nextInt(13) : top + 2 + random.nextInt(6);
-                if (water || i == 9) {
-                    return new Vec3(x + 0.5, y, z + 0.5);
+            float yaw = this.bird.getYRot() * Mth.DEG_TO_RAD;
+            Vec3 eye = this.bird.getEyePosition();
+            for (int i = 0; i < 12; i++) {
+                // 前方寄り。見つからなければ後半は全方向から
+                double ang = yaw + (random.nextDouble() - 0.5) * (i < 8 ? 2.2 : Math.PI * 2.0);
+                double dist = 14.0 + random.nextDouble() * 18.0;
+                double x = this.bird.getX() - Math.sin(ang) * dist;
+                double z = this.bird.getZ() + Math.cos(ang) * dist;
+                int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(x), Mth.floor(z));
+                boolean water = level.getFluidState(new BlockPos(Mth.floor(x), top - 1, Mth.floor(z))).is(FluidTags.WATER);
+                if (!water && i < 10) {
+                    continue;
                 }
+                // 波すれすれ（2〜7 上）が基本。4 回に 1 回は舞い上がる（10〜22）
+                double y = random.nextInt(4) == 0 ? top + 10 + random.nextInt(13) : top + 2 + random.nextInt(6);
+                Vec3 to = new Vec3(x, y, z);
+                if (level.clip(new ClipContext(eye, to, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this.bird))
+                        .getType() != HitResult.Type.MISS) {
+                    continue;                           // 島や崖の向こうは選ばない
+                }
+                return to;
             }
             return null;
         }

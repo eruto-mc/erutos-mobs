@@ -11,6 +11,7 @@ public final class ErutosMobsConfig {
     public static final ForgeConfigSpec.IntValue SHEARWATER_SPAWN_ONE_IN;
     public static final ForgeConfigSpec.IntValue SHEARWATER_MIN_DISTANCE;
     public static final ForgeConfigSpec.IntValue SHEARWATER_DESPAWN_DISTANCE;
+    public static final ForgeConfigSpec.IntValue SHEARWATER_STORM_LIGHTNING_ONE_IN;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -24,6 +25,10 @@ public final class ErutosMobsConfig {
         SHEARWATER_DESPAWN_DISTANCE = b
                 .comment("Despawns only when every player is farther than this (blocks). Vanilla water creatures use 128.")
                 .defineInRange("despawnDistance", 256, 64, 1024);
+        SHEARWATER_STORM_LIGHTNING_ONE_IN = b
+                .comment("While flying in a thunderstorm, calls a visual-only lightning bolt onto itself one tick in N",
+                        "(no fire, no damage; it becomes charged for a minute). 1800 = about every 90 s. 0 = never.")
+                .defineInRange("stormLightningOneIn", 1800, 0, 1000000);
         b.pop();
         SPEC = b.build();
     }

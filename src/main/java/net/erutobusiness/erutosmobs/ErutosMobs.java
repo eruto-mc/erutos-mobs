@@ -3,6 +3,7 @@ package net.erutobusiness.erutosmobs;
 import net.erutobusiness.erutosmobs.entity.ShearwaterEntity;
 import net.erutobusiness.erutosmobs.registry.ModEntities;
 import net.erutobusiness.erutosmobs.registry.ModItems;
+import net.erutobusiness.erutosmobs.registry.ModParticles;
 import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.world.entity.SpawnPlacements;
 import net.minecraft.world.item.CreativeModeTabs;
@@ -31,6 +32,7 @@ public class ErutosMobs {
         ModEntities.ENTITIES.register(bus);
         ModItems.ITEMS.register(bus);
         ModSounds.SOUNDS.register(bus);
+        ModParticles.PARTICLES.register(bus);
         bus.addListener(this::onAttributes);
         bus.addListener(this::onSpawnPlacements);
         bus.addListener(this::onCreativeTab);
