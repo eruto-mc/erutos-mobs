@@ -19,7 +19,10 @@ public final class ClientEvents {
     @SubscribeEvent
     public static void onRegisterParticles(RegisterParticleProvidersEvent event) {
         event.registerSpriteSet(ModParticles.FEATHER.get(), FeatherParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.PLUME.get(), FeatherParticle.PlumeProvider::new);
         event.registerSpriteSet(ModParticles.MIST.get(), MistParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.SPRAY.get(), SprayParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.SPARK.get(), SparkParticle.Provider::new);
     }
 
     private ClientEvents() {

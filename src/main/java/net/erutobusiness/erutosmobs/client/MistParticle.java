@@ -9,8 +9,10 @@ import net.minecraft.client.particle.TextureSheetParticle;
 import net.minecraft.core.particles.SimpleParticleType;
 
 /**
- * 翼端の風の筋。小さく淡い白で、重さが無く、0.7〜1 秒で薄れて少しふくらむ。
- * 翼端から 1 tick に 1 個ずつ出すと、後ろへ細い線が引かれる。
+ * 翼端の風の筋。淡い白で、重さが無く、1.1〜1.6 秒で薄れながらふくらむ。
+ * 翼端の前の tick の位置から今の位置まで並べて出すので、途切れずに後ろへ帯が引かれる（{@code ShearwaterEffects}）。
+ * ⚠ 幅は 0.6〜0.9 から 1.2〜1.6 まで（2026-09-28。前は 0.2〜0.3 で、翼幅 12 の鳥の翼端では細い糸にしか
+ *   見えなかった。大きさの物差しは {@code ModParticles} の注記）。
  */
 public class MistParticle extends TextureSheetParticle {
     private final SpriteSet sprites;
@@ -26,12 +28,12 @@ public class MistParticle extends TextureSheetParticle {
         this.gravity = 0.0f;
         this.friction = 0.9f;
         this.hasPhysics = false;
-        this.lifetime = 14 + this.random.nextInt(8);
-        this.quadSize = 0.10f + this.random.nextFloat() * 0.05f;
+        this.lifetime = 22 + this.random.nextInt(10);
+        this.quadSize = 0.30f + this.random.nextFloat() * 0.15f;
         this.rCol = 0.93f;
         this.gCol = 0.97f;
         this.bCol = 1.0f;
-        this.alpha0 = 0.5f;
+        this.alpha0 = 0.42f;
         this.alpha = this.alpha0;
         this.setSpriteFromAge(sprites);
     }
@@ -45,7 +47,7 @@ public class MistParticle extends TextureSheetParticle {
         this.setSpriteFromAge(this.sprites);
         float u = (float) this.age / (float) this.lifetime;
         this.alpha = this.alpha0 * (1.0f - u);
-        this.quadSize *= 1.03f;
+        this.quadSize *= 1.025f;
     }
 
     @Override

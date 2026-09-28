@@ -806,9 +806,12 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         boolean ok = super.hurt(source, amount);
         if (ok && this.level() instanceof ServerLevel sl && this.isAlive()) {
             triggerAnim("main", "hurt");
-            // 嵐色の羽根が散る（タイヨウチョウは常に落とすが、こちらは殴られたときだけ）
+            // 嵐色の羽根が散る（タイヨウチョウは常に落とすが、こちらは殴られたときだけ）。
+            // 体の羽 12 枚に風切羽 2 枚。散らす範囲は胴の大きさ（幅 1.5・長さ 6）に合わせる
             sl.sendParticles(ModParticles.FEATHER.get(), this.getX(), this.getY() + 1.0, this.getZ(),
-                    10, 1.0, 0.4, 1.0, 0.02);
+                    12, 1.2, 0.5, 1.8, 0.03);
+            sl.sendParticles(ModParticles.PLUME.get(), this.getX(), this.getY() + 1.2, this.getZ(),
+                    2, 2.0, 0.4, 1.5, 0.02);
             int st = getState();
             if (st == PADDLE || st == SLEEP || st == DIVE) {
                 beginTakeoff();
@@ -824,6 +827,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             triggerAnim("main", "faint");
             sl.sendParticles(ModParticles.FEATHER.get(), this.getX(), this.getY() + 1.0, this.getZ(),
                     30, 2.5, 0.6, 2.5, 0.04);
+            sl.sendParticles(ModParticles.PLUME.get(), this.getX(), this.getY() + 1.2, this.getZ(),
+                    6, 4.0, 0.6, 2.5, 0.03);
         }
     }
 
