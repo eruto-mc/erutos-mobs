@@ -10,6 +10,10 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.FluidState;
 
+import javax.annotation.Nullable;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * クライアントで出す粒子と音（2026-09-28）。サーバは状態だけを持ち、見た目はここで各自が作る
  * （タイヨウチョウも羽根はクライアント側で毎 tick 出している）。
@@ -17,16 +21,21 @@ import net.minecraft.world.level.material.FluidState;
  * ⚠⚠ 大きさは「実物 × 11」（この鳥は翼幅 12 ブロックで、実物 1.1 m の約 11 倍。1 ブロック ＝ 1 m）。
  *   最初はバニラの粒子（幅 0.2〜0.4）をそのまま出していて、翼幅の 2〜3% の粉にしかならなかった
  *   （2026-09-28・ユーザー「パーティクルが体に対して小さすぎる」）。
+ * ⚠⚠ 出どころは描いた翼の骨から取る（{@code ShearwaterRenderer} が毎コマ写す。描かれていない間だけ、キットが計算した
+ *   滑空の姿勢の点）。前は滑空の姿勢の決まった点だけで、羽ばたいている間は火花が翼から離れた空中に出ていた。
  *
  * 出すもの（設計は README の「光・粒子・雷」）:
- *   風の筋     … 速く滑空しているとき、両方の翼端から。前の tick の翼端から今の翼端まで並べて、途切れない帯にする
- *   波を切る   … 下がった翼端が水面に触れたら、2〜2.5 ブロック上がるしぶき（実物 20 cm × 11）と、切った線の泡
- *   嵐の火花   … 帯電中は翼の後縁に沿った稲妻の折れ線（長さ 1〜3 ブロック）。雷雨だけならときどき
+ *   風の筋     … 速く滑空しているとき、水面から 1 ブロックより上にある翼端から。前の tick の翼端から今の翼端まで並べる
+ *   波を切る   … 翼端が水面に触れたら、2〜3 ブロック噴き上がるしぶき（実物 20〜30 cm × 11）と、水面に残る泡の線。
+ *                ⚠ 水に触れている翼端からは風の筋を出さない（2026-09-28・ユーザー「風の筋か波切のしぶきか区別がつかない」。
+ *                どちらも白い点で、同じ翼端から重なって出ていた）
+ *   嵐の火花   … 帯電中は、後縁の稲妻（1 tick に 1〜2 本）・翼端から翼の外の空へ 1.5〜2.5 ブロック走る放電（3 tick に 1 本）・
+ *                前縁を肩から翼端まで走る長い稲妻（10 tick に 1 本）。雷雨だけなら後縁の稲妻をときどき。
+ *                どれも白い芯の帯を折れ線につなぎ、折れ目に光の点を置く（2〜4 tick で消え、次の tick に別の所へ出る）
  *   足の水しぶき … 水面からの離陸で、足が水を蹴る拍に（実物 20 cm × 11 → 幅 2 ブロックほど）
  *   水滴       … 水から飛び立った後の 5 秒、翼の後縁から落ちる
- *   航跡       … 水面を漕いで進むとき、胴の後ろへ八の字に開く（実物の幅 0.5〜1 m × 11 → 6〜8 ブロック）
- *   着水       … 急降下から水面に入った瞬間の大きなしぶき（半径 1〜3.5 ブロック）
- * 位置は {@link ShearwaterLocators}（キットが模型から計算して書いた値）を体の向きへ回して使う。
+ *   航跡       … 水面を漕いで進むとき、胴の後ろへ八の字に開く泡（実物の幅 0.5〜1 m × 11 → 6〜8 ブロック）
+ *   着水       … 急降下から水面に入った瞬間の大きなしぶきと泡の輪（半径 1〜3.5 ブロック）
  */
 final class ShearwaterEffects {
     private final ShearwaterEntity bird;
@@ -35,7 +44,7 @@ final class ShearwaterEffects {
     private int wetTicks;
     private int splashSoundCooldown;
     private boolean takeoffFromWater;
-    /** 前の tick の翼端（世界の座標）。風の筋を途切れさせないため。滑空していない間は null */
+    /** 前の tick の翼端（世界の座標）。風の筋と泡の線を途切れさせないため。飛んでいない間は null */
     private double[] lastTipL;
     private double[] lastTipR;
 
@@ -63,14 +72,12 @@ final class ShearwaterEffects {
         double speed = Math.sqrt(dx * dx + dz * dz);
         int bank = this.bird.getBank();
 
-        // 風の筋（前の翼端から今の翼端まで 3 つ並べる）
-        if (st == ShearwaterEntity.GLIDE && speed > 0.12) {
-            double[] tipL = at(bank > 0 ? ShearwaterLocators.BANK_R_TIP_L
-                    : bank < 0 ? ShearwaterLocators.BANK_L_TIP_L : ShearwaterLocators.GLIDE_TIP_L, yaw);
-            double[] tipR = at(bank > 0 ? ShearwaterLocators.BANK_R_TIP_R
-                    : bank < 0 ? ShearwaterLocators.BANK_L_TIP_R : ShearwaterLocators.GLIDE_TIP_R, yaw);
-            trail(level, this.lastTipL, tipL);
-            trail(level, this.lastTipR, tipR);
+        // 翼端: 水に触れていれば波を切り、離れていて速く滑空していれば風の筋
+        if (st == ShearwaterEntity.FLY || st == ShearwaterEntity.GLIDE || st == ShearwaterEntity.HOVER) {
+            double[] tipL = tip(0, bank, yaw);
+            double[] tipR = tip(1, bank, yaw);
+            wingTip(level, r, st, speed, dx, dz, tipL, this.lastTipL);
+            wingTip(level, r, st, speed, dx, dz, tipR, this.lastTipR);
             this.lastTipL = tipL;
             this.lastTipR = tipR;
         } else {
@@ -78,44 +85,20 @@ final class ShearwaterEffects {
             this.lastTipR = null;
         }
 
-        // 波を切る（下がった側の翼端だけ）
-        if (st == ShearwaterEntity.GLIDE && bank != 0) {
-            double[] low = at(bank > 0 ? ShearwaterLocators.BANK_R_TIP_R : ShearwaterLocators.BANK_L_TIP_L, yaw);
-            double surface = surfaceNear(level, low);
-            if (!Double.isNaN(surface) && low[1] <= surface + 0.3) {
-                // 翼の外へ向かって跳ね上がる塊 3 つ・細かな滴 6 つ・切った線の泡 2 つ
-                double ox = low[0] - this.bird.getX();
-                double oz = low[2] - this.bird.getZ();
-                double on = Math.max(Math.sqrt(ox * ox + oz * oz), 1.0E-3);
-                for (int i = 0; i < 3; i++) {
-                    level.addParticle(ModParticles.SPRAY.get(), low[0], surface + 0.1, low[2],
-                            ox / on * (0.06 + r.nextDouble() * 0.08) - dx * 0.3,
-                            0.28 + r.nextDouble() * 0.14,
-                            oz / on * (0.06 + r.nextDouble() * 0.08) - dz * 0.3);
-                }
-                for (int i = 0; i < 6; i++) {
-                    level.addParticle(ParticleTypes.SPLASH, low[0] + (r.nextDouble() - 0.5) * 1.5, surface + 0.05,
-                            low[2] + (r.nextDouble() - 0.5) * 1.5, 0.0, 0.2, 0.0);
-                }
-                for (int i = 0; i < 2; i++) {
-                    level.addParticle(ParticleTypes.FISHING, low[0] + (r.nextDouble() - 0.5) * 0.8, surface + 0.02,
-                            low[2] + (r.nextDouble() - 0.5) * 0.8, 0.0, 0.0, 0.0);
-                }
-                if (this.splashSoundCooldown == 0) {
-                    level.playLocalSound(low[0], surface, low[2], SoundEvents.GENERIC_SPLASH, SoundSource.NEUTRAL,
-                            0.6f, 1.1f + r.nextFloat() * 0.3f, false);
-                    this.splashSoundCooldown = 8;
-                }
+        // 嵐の火花
+        if (this.bird.isCharged()) {
+            int n = 1 + r.nextInt(2);
+            for (int i = 0; i < n; i++) {
+                edgeArc(level, r, yaw);
             }
-        }
-
-        // 嵐の火花（帯電中は稲妻の折れ線、雷雨だけならときどき）
-        boolean charged = this.bird.isCharged();
-        if (charged || level.isThundering()) {
-            int arcs = charged ? (r.nextInt(3) == 0 ? 2 : 1) : (r.nextInt(12) == 0 ? 1 : 0);
-            for (int i = 0; i < arcs; i++) {
-                arc(level, r, yaw);
+            if (r.nextInt(3) == 0) {
+                discharge(level, r, yaw);
             }
+            if (r.nextInt(10) == 0) {
+                leadingArc(level, r, yaw);
+            }
+        } else if (level.isThundering() && r.nextInt(12) == 0) {
+            edgeArc(level, r, yaw);
         }
 
         // 足の水しぶき（離陸の走り。動きは 2 秒で 3 周＝6 歩 → 約 6.7 tick ごと）
@@ -133,33 +116,31 @@ final class ShearwaterEffects {
         if (this.wetTicks > 0) {
             this.wetTicks--;
             for (int i = 0; i < 4; i++) {
-                double[] e = ShearwaterLocators.TRAILING_EDGE[r.nextInt(ShearwaterLocators.TRAILING_EDGE.length)];
-                double[] w = at(e, yaw);
+                double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
                 level.addParticle(ParticleTypes.FALLING_WATER, w[0], w[1] - 0.05, w[2], 0.0, 0.0, 0.0);
             }
             if (r.nextInt(4) == 0) {
-                double[] e = ShearwaterLocators.TRAILING_EDGE[r.nextInt(ShearwaterLocators.TRAILING_EDGE.length)];
-                double[] w = at(e, yaw);
+                double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
                 level.addParticle(ModParticles.SPRAY.get(), w[0], w[1] - 0.1, w[2], 0.0, -0.05, 0.0);
             }
         }
 
-        // 航跡（水面を漕いで進む）: 胴の後ろへ八の字に開く 2 本の線
-        if (st == ShearwaterEntity.PADDLE && speed > 0.01 && this.stateTicks % 2 == 0) {
+        // 航跡（水面を漕いで進む）: 胴の後ろへ八の字に開く 2 本の泡の線
+        if (st == ShearwaterEntity.PADDLE && speed > 0.01 && this.stateTicks % 3 == 0) {
             for (int side = -1; side <= 1; side += 2) {
                 double back = 1.5 + r.nextDouble() * 4.0;
                 double[] p = at(new double[] {side * (0.8 + back * 0.55), 0.3, -back}, yaw);
                 double surface = surfaceNear(level, p);
                 if (!Double.isNaN(surface)) {
-                    level.addParticle(ParticleTypes.FISHING, p[0], surface + 0.02, p[2], 0.0, 0.0, 0.0);
+                    level.addParticle(ModParticles.FOAM.get(), p[0], surface + 0.02, p[2], 0.0, 0.0, 0.0);
                 }
             }
-            if (speed > 0.04 && r.nextInt(3) == 0) {
+            if (speed > 0.04 && r.nextInt(2) == 0) {
                 double[] bow = at(new double[] {0.0, 0.3, 2.2}, yaw);
                 double surface = surfaceNear(level, bow);
                 if (!Double.isNaN(surface)) {
                     level.addParticle(ModParticles.SPRAY.get(), bow[0], surface + 0.05, bow[2],
-                            (r.nextDouble() - 0.5) * 0.1, 0.12, (r.nextDouble() - 0.5) * 0.1);
+                            (r.nextDouble() - 0.5) * 0.1, 0.2, (r.nextDouble() - 0.5) * 0.1);
                 }
             }
         }
@@ -167,7 +148,7 @@ final class ShearwaterEffects {
 
     private void onChange(Level level, RandomSource r, int prev, int now) {
         if (prev == ShearwaterEntity.DIVE && now == ShearwaterEntity.PADDLE) {
-            // 着水の大きなしぶき（実物 1 m 近い水柱 × 11 は大きすぎるので、半径 1〜3.5・高さ 3 ほどに抑える）
+            // 着水の大きなしぶき（実物 1 m 近い水柱 × 11 は大きすぎるので、半径 1〜3.5・高さ 1〜2.5 ほどに抑える）と泡の輪
             double[] c = at(ShearwaterLocators.BODY_CENTER, this.bird.yBodyRot);
             double surface = surfaceNear(level, c);
             if (!Double.isNaN(surface)) {
@@ -177,6 +158,12 @@ final class ShearwaterEffects {
                     level.addParticle(ModParticles.SPRAY.get(), c[0] + Math.cos(a) * rad, surface + 0.1,
                             c[2] + Math.sin(a) * rad, Math.cos(a) * 0.12, 0.3 + r.nextDouble() * 0.2,
                             Math.sin(a) * 0.12);
+                }
+                for (int i = 0; i < 14; i++) {
+                    double a = i / 14.0 * Math.PI * 2.0;
+                    double rad = 2.5 + r.nextDouble() * 1.0;
+                    level.addParticle(ModParticles.FOAM.get(), c[0] + Math.cos(a) * rad, surface + 0.02,
+                            c[2] + Math.sin(a) * rad, 0.0, 0.0, 0.0);
                 }
                 burst(level, r, c[0], surface, c[2], 0, 50, 6.0, 0.3);
                 for (int i = 0; i < 20; i++) {
@@ -195,8 +182,52 @@ final class ShearwaterEffects {
         }
     }
 
+    /** 翼端 1 つ。水面から 0.25 以内なら波を切り、1 ブロックより上で速く滑空していれば風の筋 */
+    private void wingTip(Level level, RandomSource r, int st, double speed, double dx, double dz, double[] tip,
+                         @Nullable double[] last) {
+        double surface = surfaceNear(level, tip);
+        if (!Double.isNaN(surface) && tip[1] <= surface + 0.25) {
+            shear(level, r, dx, dz, tip, last, surface);
+        } else if (st == ShearwaterEntity.GLIDE && speed > 0.12 && (Double.isNaN(surface) || tip[1] > surface + 1.0)) {
+            trail(level, last, tip);
+        }
+    }
+
+    /**
+     * 波を切る: 翼の外へ 2〜3 ブロック噴き上がるしぶき 5 つ・細かな滴 4 つと、水面に寝かせた泡を前の翼端から今の翼端まで 3 つ
+     * （切った線が水面に 3〜4 秒残る）。しぶきの上へ 0.48〜0.60 は、落ちる速さと空気の抵抗（{@code SprayParticle}）で
+     * 2.0〜3.1 ブロックの高さになる
+     */
+    private void shear(Level level, RandomSource r, double dx, double dz, double[] tip, @Nullable double[] last,
+                       double surface) {
+        double ox = tip[0] - this.bird.getX();
+        double oz = tip[2] - this.bird.getZ();
+        double on = Math.max(Math.sqrt(ox * ox + oz * oz), 1.0E-3);
+        for (int i = 0; i < 5; i++) {
+            double out = 0.04 + r.nextDouble() * 0.10;
+            level.addParticle(ModParticles.SPRAY.get(), tip[0] + (r.nextDouble() - 0.5) * 0.6, surface + 0.1,
+                    tip[2] + (r.nextDouble() - 0.5) * 0.6, ox / on * out + dx * 0.15, 0.48 + r.nextDouble() * 0.12,
+                    oz / on * out + dz * 0.15);
+        }
+        for (int i = 0; i < 4; i++) {
+            level.addParticle(ParticleTypes.SPLASH, tip[0] + (r.nextDouble() - 0.5) * 1.5, surface + 0.05,
+                    tip[2] + (r.nextDouble() - 0.5) * 1.5, 0.0, 0.2, 0.0);
+        }
+        double[] from = last != null ? last : tip;
+        for (int k = 1; k <= 3; k++) {
+            double u = k / 3.0;
+            level.addParticle(ModParticles.FOAM.get(), from[0] + (tip[0] - from[0]) * u + (r.nextDouble() - 0.5) * 0.3,
+                    surface + 0.02, from[2] + (tip[2] - from[2]) * u + (r.nextDouble() - 0.5) * 0.3, 0.0, 0.0, 0.0);
+        }
+        if (this.splashSoundCooldown == 0) {
+            level.playLocalSound(tip[0], surface, tip[2], SoundEvents.GENERIC_SPLASH, SoundSource.NEUTRAL,
+                    0.6f, 1.1f + r.nextFloat() * 0.3f, false);
+            this.splashSoundCooldown = 8;
+        }
+    }
+
     /** 風の筋: from から to まで 3 つ並べる（from が無ければ to に 1 つ） */
-    private static void trail(Level level, double[] from, double[] to) {
+    private static void trail(Level level, @Nullable double[] from, double[] to) {
         if (from == null) {
             level.addParticle(ModParticles.MIST.get(), to[0], to[1], to[2], 0.0, 0.0, 0.0);
             return;
@@ -208,7 +239,7 @@ final class ShearwaterEffects {
         }
     }
 
-    /** しぶき: 大きな塊 big 個（上へ up）と細かな滴 small 個を、幅 spread に散らす */
+    /** しぶき: 大きな塊 big 個（上へ up）と細かな滴 small 個を幅 spread に散らし、水面に泡を残す */
     private static void burst(Level level, RandomSource r, double x, double surface, double z, int big, int small,
                               double spread, double up) {
         for (int i = 0; i < big; i++) {
@@ -220,32 +251,114 @@ final class ShearwaterEffects {
             level.addParticle(ParticleTypes.SPLASH, x + (r.nextDouble() - 0.5) * spread, surface + 0.05,
                     z + (r.nextDouble() - 0.5) * spread, 0.0, 0.2, 0.0);
         }
-        for (int i = 0; i < Math.max(2, small / 4); i++) {
-            level.addParticle(ParticleTypes.FISHING, x + (r.nextDouble() - 0.5) * spread, surface + 0.02,
+        for (int i = 0; i < Math.max(2, small / 6); i++) {
+            level.addParticle(ModParticles.FOAM.get(), x + (r.nextDouble() - 0.5) * spread, surface + 0.02,
                     z + (r.nextDouble() - 0.5) * spread, 0.0, 0.0, 0.0);
         }
     }
 
-    /**
-     * 稲妻の折れ線: 翼の後縁の隣り合う 2 点（か、翼端とその隣）を、横へ振れる 7 つの火花で結ぶ。
-     * 長さは点の間隔ぶん（1〜3 ブロック）。
-     */
-    private void arc(Level level, RandomSource r, float yaw) {
-        double[][] edge = ShearwaterLocators.TRAILING_EDGE;
-        int half = edge.length / 2;
+    // ---------------------------------------------------------------- 稲妻
+
+    /** 後縁の稲妻: 後縁の点（付け根 → 翼端）のうち、1〜2 つ隣どうしを結ぶ（長さ 0.4〜2.4 ブロック） */
+    private void edgeArc(Level level, RandomSource r, float yaw) {
         int side = r.nextInt(2);
-        int k = r.nextInt(half);
-        double[] a = at(edge[side * half + k], yaw);
-        double[] b = k + 1 < half ? at(edge[side * half + k + 1], yaw)
-                : at(side == 0 ? ShearwaterLocators.GLIDE_TIP_L : ShearwaterLocators.GLIDE_TIP_R, yaw);
-        for (int i = 0; i <= 6; i++) {
-            double u = i / 6.0;
-            double jag = (i == 0 || i == 6) ? 0.0 : 0.35;
-            level.addParticle(ModParticles.SPARK.get(),
-                    a[0] + (b[0] - a[0]) * u + (r.nextDouble() - 0.5) * jag,
-                    a[1] + (b[1] - a[1]) * u + (r.nextDouble() - 0.5) * jag,
-                    a[2] + (b[2] - a[2]) * u + (r.nextDouble() - 0.5) * jag, 0.0, 0.0, 0.0);
+        int n = ShearwaterLocators.EDGE_PER_SIDE;
+        int k = r.nextInt(n);
+        int k2 = Math.min(k + 1 + r.nextInt(2), n);
+        double[] a = edge(side, k, yaw);
+        double[] b = k2 < n ? edge(side, k2, yaw) : tip(side, 0, yaw);
+        bolt(level, r, a, b, 2, 0.45);
+    }
+
+    /**
+     * 放電: 翼端か後縁の外側から、翼の外へ 1.5〜2.5 ブロック空へ走り（上下へはばらし、前後へは少しだけ）、途中から枝を 1 本出す。
+     * ⚠ 前は向きを前後にも大きくばらし長さも 2〜3.5 だったので、後ろから追って撮ると手前へ伸びた帯が画面を横切った（2026-09-28）
+     */
+    private void discharge(Level level, RandomSource r, float yaw) {
+        int side = r.nextInt(2);
+        int n = ShearwaterLocators.EDGE_PER_SIDE;
+        double[] a = r.nextInt(2) == 0 ? tip(side, 0, yaw) : edge(side, n - 1 - r.nextInt(3), yaw);
+        double ox = a[0] - this.bird.getX();
+        double oz = a[2] - this.bird.getZ();
+        double on = Math.max(Math.sqrt(ox * ox + oz * oz), 1.0E-3);
+        double t = Math.toRadians(yaw);
+        double fx = -Math.sin(t), fz = Math.cos(t);                 // 体の前（Minecraft の yaw の向き）
+        double len = 1.5 + r.nextDouble();
+        double out = 0.75, fwd = (r.nextDouble() - 0.5) * 0.5, up = (r.nextDouble() - 0.5) * 0.9;
+        double[] b = {a[0] + (ox / on * out + fx * fwd) * len, a[1] + up * len, a[2] + (oz / on * out + fz * fwd) * len};
+        List<double[]> kinks = bolt(level, r, a, b, 3, 0.55);
+        double[] p = kinks.get(1 + r.nextInt(kinks.size() - 2));
+        double bl = 0.6 + r.nextDouble() * 0.5;
+        bolt(level, r, p, new double[] {p[0] + ox / on * bl * 0.5 + (r.nextDouble() - 0.5) * bl, p[1] - r.nextDouble() * bl,
+                p[2] + oz / on * bl * 0.5 + (r.nextDouble() - 0.5) * bl}, 1, 0.3);
+    }
+
+    /** 前縁の長い稲妻: 肩 → 手首 → 腕の先 → 翼端（約 6 ブロック） */
+    private void leadingArc(Level level, RandomSource r, float yaw) {
+        int side = r.nextInt(2);
+        double[] prev = arm(side, 0, yaw);
+        for (int k = 1; k <= ShearwaterLocators.ARM_PER_SIDE; k++) {
+            double[] next = k < ShearwaterLocators.ARM_PER_SIDE ? arm(side, k, yaw) : tip(side, 0, yaw);
+            bolt(level, r, prev, next, 2, 0.35);
+            prev = next;
         }
+    }
+
+    /**
+     * 稲妻 1 本: a から b へ折れ目 kinks 個の折れ線を引く。区切りごとに帯（{@code BOLT}。速さの欄に次の点までの向きと長さ）を
+     * 1 つ出し、折れ目と先に光の点（{@code SPARK}）を置いて、帯のつなぎ目を隠す。
+     * 折れ目は a〜b を等分した点を jag の幅で横へ振る。返すのは折れ線の点（a・折れ目・b）
+     */
+    private static List<double[]> bolt(Level level, RandomSource r, double[] a, double[] b, int kinks, double jag) {
+        List<double[]> pts = new ArrayList<>();
+        pts.add(a);
+        for (int i = 1; i <= kinks; i++) {
+            double u = i / (double) (kinks + 1);
+            pts.add(new double[] {a[0] + (b[0] - a[0]) * u + (r.nextDouble() - 0.5) * jag,
+                    a[1] + (b[1] - a[1]) * u + (r.nextDouble() - 0.5) * jag,
+                    a[2] + (b[2] - a[2]) * u + (r.nextDouble() - 0.5) * jag});
+        }
+        pts.add(b);
+        for (int i = 0; i + 1 < pts.size(); i++) {
+            double[] p = pts.get(i);
+            double[] q = pts.get(i + 1);
+            level.addParticle(ModParticles.BOLT.get(), p[0], p[1], p[2], q[0] - p[0], q[1] - p[1], q[2] - p[2]);
+            level.addParticle(ModParticles.SPARK.get(), q[0], q[1], q[2], 0.0, 0.0, 0.0);
+        }
+        return pts;
+    }
+
+    // ---------------------------------------------------------------- 出どころ
+
+    /** 翼端（side 0＝左・1＝右）。描いた骨から取れていなければ、滑空か傾き（bank）の決まった点 */
+    private double[] tip(int side, int bank, float yaw) {
+        if (this.bird.livePoints() != null) {
+            return live(ShearwaterLocators.TIP + side, yaw);
+        }
+        double[] p = side == 0
+                ? (bank > 0 ? ShearwaterLocators.BANK_R_TIP_L : bank < 0 ? ShearwaterLocators.BANK_L_TIP_L : ShearwaterLocators.GLIDE_TIP_L)
+                : (bank > 0 ? ShearwaterLocators.BANK_R_TIP_R : bank < 0 ? ShearwaterLocators.BANK_L_TIP_R : ShearwaterLocators.GLIDE_TIP_R);
+        return at(p, yaw);
+    }
+
+    /** 後縁の k 番目（付け根から先へ） */
+    private double[] edge(int side, int k, float yaw) {
+        return live(ShearwaterLocators.EDGE + side * ShearwaterLocators.EDGE_PER_SIDE + k, yaw);
+    }
+
+    /** 前縁の k 番目（0＝肩・1＝手首・2＝腕の先） */
+    private double[] arm(int side, int k, float yaw) {
+        return live(ShearwaterLocators.ARM + side * ShearwaterLocators.ARM_PER_SIDE + k, yaw);
+    }
+
+    /** 点 i（{@code ShearwaterLocators.LIVE_*} の番号）の世界の位置。描いた骨から取れていなければ滑空の姿勢の点 */
+    private double[] live(int i, float yaw) {
+        double[][] pts = this.bird.livePoints();
+        if (pts != null) {
+            double[] p = pts[i];
+            return new double[] {this.bird.getX() + p[0], this.bird.getY() + p[1], this.bird.getZ() + p[2]};
+        }
+        return at(ShearwaterLocators.LIVE_GLIDE[i], yaw);
     }
 
     private double[] at(double[] local, float yaw) {

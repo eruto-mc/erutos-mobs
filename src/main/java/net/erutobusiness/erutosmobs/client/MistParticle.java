@@ -13,6 +13,8 @@ import net.minecraft.core.particles.SimpleParticleType;
  * 翼端の前の tick の位置から今の位置まで並べて出すので、途切れずに後ろへ帯が引かれる（{@code ShearwaterEffects}）。
  * ⚠ 幅は 0.6〜0.9 から 1.2〜1.6 まで（2026-09-28。前は 0.2〜0.3 で、翼幅 12 の鳥の翼端では細い糸にしか
  *   見えなかった。大きさの物差しは {@code ModParticles} の注記）。
+ * ⚠ 見た目は変えない（2026-09-28・ユーザー「翼も風の筋かっこいいね」）。しぶきと見分けがつかなかった件は、
+ *   しぶき・泡の絵を水らしく描き直し、水に触れている翼端からは風の筋を出さないことで分けた。
  */
 public class MistParticle extends TextureSheetParticle {
     private final SpriteSet sprites;

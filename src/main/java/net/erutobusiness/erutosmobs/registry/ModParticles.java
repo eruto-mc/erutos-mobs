@@ -33,12 +33,27 @@ public final class ModParticles {
      */
     public static final RegistryObject<SimpleParticleType> MIST =
             PARTICLES.register("shearwater_mist", () -> new SimpleParticleType(true));
-    /** 大きなしぶき（実物 20〜40 cm の水の塊 → 幅 0.7〜1.4）。絵はバニラのしぶき（splash_0〜3） */
+    /**
+     * 大きなしぶき（絵の幅 0.6〜1.1。大きな粒はその半分ほど＝実物 3〜5 cm × 11）。絵はキットが描く水の粒 `shearwater_spray_{0..3}`。
+     * ⚠ バニラのしぶき（splash_0〜3）は 8×8 の隅の 2〜3 画素で、海の上では見えなかった（2026-09-28）
+     */
     public static final RegistryObject<SimpleParticleType> SPRAY =
             PARTICLES.register("shearwater_spray", () -> new SimpleParticleType(true));
-    /** 帯電と雷雨の火花（幅 0.3〜0.6。暗くても明るい）。絵はバニラの光の点（glow） */
+    /** 水面の泡（幅 0.8〜1.4。水面に寝かせる）。波を切った線・航跡・着水の輪。絵はキットが描く `shearwater_foam_{0,1}` */
+    public static final RegistryObject<SimpleParticleType> FOAM =
+            PARTICLES.register("shearwater_foam", () -> new SimpleParticleType(true));
+    /**
+     * 稲妻の折れ目の光の点（幅 0.28〜0.4。暗くても明るい）。絵はキットが描く光の輪 `shearwater_spark_{0,1}`。
+     * ⚠ バニラの光の点（glow）は太さ 1 画素の十字で、見えなかった（2026-09-28）
+     */
     public static final RegistryObject<SimpleParticleType> SPARK =
             PARTICLES.register("shearwater_spark", () -> new SimpleParticleType(true));
+    /**
+     * 稲妻のひと区切り（幅 0.2〜0.26 の帯。出した点から、速さの欄に渡した向きと長さの先まで）。絵は `shearwater_bolt_0`。
+     * ⚠ 光の点を並べた稲妻は「数珠」に見えた（2026-09-28）
+     */
+    public static final RegistryObject<SimpleParticleType> BOLT =
+            PARTICLES.register("shearwater_bolt", () -> new SimpleParticleType(true));
 
     private ModParticles() {
     }

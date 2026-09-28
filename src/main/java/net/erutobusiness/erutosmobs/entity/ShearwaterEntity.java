@@ -97,6 +97,12 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final int CRY_TICKS = 24;
     private int cryGlowTicks;
     private final ShearwaterEffects effects = new ShearwaterEffects(this);
+    /**
+     * 描いた骨から取った翼の点（実体から見た位置・世界の向き・ブロック単位。並びは {@code ShearwaterLocators.LIVE_*}）。
+     * クライアントだけ。`ShearwaterRenderer` が描くたびに書き、粒子（{@link ShearwaterEffects}）が読む
+     */
+    private double[][] livePoints;
+    private int livePointsTick = -100;
     /** 滑空を保たせる残り（{@link ShearPassGoal} が波を切る間、羽ばたき・休みへ切り替えない） */
     private int glideHold;
     /** 次に波を切ってよいまでの tick（{@link ShearPassGoal}） */
@@ -372,6 +378,18 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     public boolean isCharged() {
         return this.entityData.get(CHARGED);
+    }
+
+    /** 描いた骨から取った翼の点を受け取る（`ShearwaterRenderer` が描くたびに呼ぶ）。 */
+    public void setLivePoints(double[][] points) {
+        this.livePoints = points;
+        this.livePointsTick = this.tickCount;
+    }
+
+    /** 描いた骨から取った翼の点。3 tick より古ければ（画面の外にいて描かれていない）null。 */
+    @Nullable
+    double[][] livePoints() {
+        return this.tickCount - this.livePointsTick <= 3 ? this.livePoints : null;
     }
 
     /** 鳴いた直後の光の上乗せ（0〜0.6）。鳴きの動きの 1.2 秒で山を描く。クライアントだけで意味を持つ */

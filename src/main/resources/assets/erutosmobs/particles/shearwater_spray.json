@@ -1,8 +1,8 @@
 {
   "textures": [
-    "minecraft:splash_0",
-    "minecraft:splash_1",
-    "minecraft:splash_2",
-    "minecraft:splash_3"
+    "erutosmobs:shearwater_spray_0",
+    "erutosmobs:shearwater_spray_1",
+    "erutosmobs:shearwater_spray_2",
+    "erutosmobs:shearwater_spray_3"
   ]
 }

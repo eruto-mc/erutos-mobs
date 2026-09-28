@@ -22,6 +22,8 @@ public final class ClientEvents {
         event.registerSpriteSet(ModParticles.PLUME.get(), FeatherParticle.PlumeProvider::new);
         event.registerSpriteSet(ModParticles.MIST.get(), MistParticle.Provider::new);
         event.registerSpriteSet(ModParticles.SPRAY.get(), SprayParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.FOAM.get(), FoamParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.BOLT.get(), BoltParticle.Provider::new);
         event.registerSpriteSet(ModParticles.SPARK.get(), SparkParticle.Provider::new);
     }
 

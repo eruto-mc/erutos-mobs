@@ -6,12 +6,17 @@ import net.minecraft.client.particle.ParticleProvider;
 import net.minecraft.client.particle.ParticleRenderType;
 import net.minecraft.client.particle.SpriteSet;
 import net.minecraft.client.particle.TextureSheetParticle;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.tags.FluidTags;
 
 /**
- * 大きなしぶき。バニラのしぶきの絵（splash_0〜3）を、幅 0.7〜1.4 ブロックで出す。
- * 渡された速さのまま飛び、重さ 1.0（1 tick に 0.04 ずつ落ちる）で弧を描いて、最後の 8 tick で薄れる。
- * ⚠ 上へ 0.3〜0.45 で出すと 2〜2.5 ブロック上がる（翼幅 12 の鳥の翼端が水を切る高さ。実物 20 cm × 11）。
+ * 大きなしぶき。水の粒の絵（白い芯・水色の縁・右下が濃い青。キットが描く `shearwater_spray_{0..3}`）を、
+ * 幅 0.6〜1.1 ブロックで出す。渡された速さのまま飛び、重さ 1.0（1 tick に 0.04 ずつ落ちる）と空気の抵抗 0.96 で
+ * 弧を描き、水へ落ちたら消える。最後の 6 tick で薄れる。
+ * 上へ出す速さと上がる高さ（計算）: 0.30 → 0.8・0.45 → 1.8・0.50 → 2.2・0.60 → 3.1 ブロック。
+ * ⚠⚠ 2026-09-28・ユーザー「風の筋か波切のしぶきか区別がつかない」。前はバニラのしぶきの絵（splash_0〜3）を借りていた。
+ *   開いて見たら 8×8 の下の隅に濃い青の 2〜3 画素しかなく、海の上では見えていなかった。
  */
 public class SprayParticle extends TextureSheetParticle {
     protected SprayParticle(ClientLevel level, double x, double y, double z, double xd, double yd, double zd,
@@ -23,22 +28,23 @@ public class SprayParticle extends TextureSheetParticle {
         this.zd = zd;
         this.gravity = 1.0f;
         this.friction = 0.96f;
-        this.lifetime = 18 + this.random.nextInt(12);
-        this.quadSize = 0.35f + this.random.nextFloat() * 0.35f;
-        float c = 0.88f + this.random.nextFloat() * 0.12f;
-        this.rCol = c * 0.92f;
-        this.gCol = c * 0.97f;
-        this.bCol = c;
-        this.alpha = 0.9f;
+        this.lifetime = 20 + this.random.nextInt(14);
+        this.quadSize = 0.30f + this.random.nextFloat() * 0.25f;
+        this.alpha = 1.0f;
     }
 
     @Override
     public void tick() {
         super.tick();
-        if (this.age > this.lifetime - 8) {
-            this.alpha = Math.max(0.0f, 0.9f * (this.lifetime - this.age) / 8.0f);
+        if (this.removed) {
+            return;
         }
-        if (this.onGround) {
+        if (this.age > this.lifetime - 6) {
+            this.alpha = Math.max(0.0f, (this.lifetime - this.age) / 6.0f);
+        }
+        // 落ちて水に入ったら消える（水には当たり判定が無いので、放っておくと水の中を沈んでいく）
+        if (this.onGround || (this.yd < 0.0
+                && this.level.getFluidState(BlockPos.containing(this.x, this.y, this.z)).is(FluidTags.WATER))) {
             this.remove();
         }
     }

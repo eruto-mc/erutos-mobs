@@ -10,10 +10,11 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.core.particles.SimpleParticleType;
 
 /**
- * 火花。バニラの光の点（glow）を幅 0.3〜0.6 ブロックで、暗くても明るく（光の強さ最大で）描く。
- * 3〜6 tick だけ光り、細かく震えて消える。帯電中の稲妻は、これを翼の後縁に沿って折れ線に並べて描く
- * （{@code ShearwaterEffects}）。⚠ バニラの電気の火花（幅 0.15〜0.3・周りの明るさで暗くなる）は、
- * 翼幅 12 の鳥の上では見分けられなかった（2026-09-28 に撮った絵）。
+ * 稲妻の折れ目の光の点。白い芯に水色の光の輪の絵（キットが描く `shearwater_spark_{0,1}`）を、幅 0.28〜0.4 ブロックで、
+ * 暗くても明るく（光の強さ最大で）描く。2〜4 tick だけ光る。{@code ShearwaterEffects.bolt} が稲妻の帯
+ * （{@link BoltParticle}）のつなぎ目と先に置く（毎 tick 別の場所に新しい稲妻が出て、ぱちぱち走って見える）。
+ * ⚠⚠ 2026-09-28・ユーザー「帯電の火花も見えない」。前はバニラの光の点（glow）を散らしていた。開いて見たら
+ *   glow は 8×8 の太さ 1 画素の十字で、大きくしても細い十字が翼の上にいくつか乗るだけだった。
  */
 public class SparkParticle extends TextureSheetParticle {
     protected SparkParticle(ClientLevel level, double x, double y, double z, double xd, double yd, double zd,
@@ -26,18 +27,8 @@ public class SparkParticle extends TextureSheetParticle {
         this.gravity = 0.0f;
         this.friction = 0.7f;
         this.hasPhysics = false;
-        this.lifetime = 3 + this.random.nextInt(4);
-        this.quadSize = 0.15f + this.random.nextFloat() * 0.15f;
-        // 嵐の火花: 青白く、ときどき琥珀（体の光る縁と同じ色）
-        if (this.random.nextInt(4) == 0) {
-            this.rCol = 1.0f;
-            this.gCol = 0.78f;
-            this.bCol = 0.35f;
-        } else {
-            this.rCol = 0.75f;
-            this.gCol = 0.92f;
-            this.bCol = 1.0f;
-        }
+        this.lifetime = 2 + this.random.nextInt(3);
+        this.quadSize = 0.14f + this.random.nextFloat() * 0.06f;
     }
 
     @Override
