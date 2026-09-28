@@ -78,6 +78,14 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> BANK =
             SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
     private float bankFilter;
+    /**
+     * 上り下りの傾き（度・正で上り＝鼻先が上）。クライアントだけで、位置の変化から決める（{@link #tick}）。
+     * 描画（ShearwaterModel）が胴の回転に足す。ルギアの `q.pitch_tilt`（±45° で止める）と、
+     * タイヨウチョウの `birdPitch`（上下の速さ × 57.3）と同じ役。
+     */
+    public float tilt;
+    public float tiltO;
+    private static final float MAX_TILT = 35.0f;
 
     private static final RawAnimation ANIM_FLY = RawAnimation.begin().thenLoop("animation.shearwater.swim");
     private static final RawAnimation ANIM_GLIDE = RawAnimation.begin().thenLoop("animation.shearwater.glide");
@@ -97,7 +105,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     /** 動きの長さ（tick）。キットの秒 × 20。 */
     private static final int DIVE_TICKS = 24;
-    private static final int TAKEOFF_TICKS = 28;
+    /** 離陸は 2.0 秒（2026-09-28。羽ばたきを大きさに合わせて遅くしたので、打つ回数を保つために 1.4 → 2.0） */
+    private static final int TAKEOFF_TICKS = 40;
+    /** 羽ばたきの 1 打（tick）。キットの `LEGEND_SCALE`（飛ぶ 0.85 秒・上る 0.77 秒）× 20 */
+    private static final int FLAP_TICKS = 17;
+    private static final int CLIMB_FLAP_TICKS = 15;
     private static final int FAINT_TICKS = 40;
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
@@ -283,6 +295,25 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         return s == STAND || s == WALK;
     }
 
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.level().isClientSide) {
+            // 上り下りの傾き。この tick の位置の変化から角度を出し、急に振れないよう 15% ずつ寄せる
+            this.tiltO = this.tilt;
+            float target = 0.0f;
+            int st = getState();
+            if (st == FLY || st == GLIDE || st == HOVER) {
+                double dx = this.getX() - this.xo;
+                double dz = this.getZ() - this.zo;
+                double dy = this.getY() - this.yo;
+                double h = Math.max(Math.sqrt(dx * dx + dz * dz), 0.08);
+                target = net.minecraft.util.Mth.clamp((float) Math.toDegrees(Math.atan2(dy, h)), -MAX_TILT, MAX_TILT);
+            }
+            this.tilt += (target - this.tilt) * 0.15f;
+        }
+    }
+
     public boolean isOnWater() {
         int s = getState();
         return s == PADDLE || s == SLEEP;
@@ -318,9 +349,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     }
 
     private void tickFlight(int st) {
-        // 羽音。羽ばたきは 4 Hz（1 打 5 tick。一次: Harada ら J Exp Biol 2026）なので 2 打に 1 回、小さく
-        if (st == FLY && this.stateTimer % 10 == 2) {
-            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.45f, 1.05f + this.random.nextFloat() * 0.2f);
+        // 羽音は 1 打に 1 回（0.85 秒＝17 tick）。大きな翼なので低く大きめに（2026-09-28。前は 4 Hz の小鳥の拍だった）
+        if (st == FLY && this.stateTimer % FLAP_TICKS == 2) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.9f, 0.75f + this.random.nextFloat() * 0.15f);
         }
         // 傾き（bank）: 向きの変化から左右を決め、滑空の左右 2 本を選ばせる
         float dyaw = net.minecraft.util.Mth.wrapDegrees(this.getYRot() - this.yRotO);
@@ -499,11 +530,13 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     private void tickTakeoff() {
         this.setNoGravity(true);
-        if (this.stateTimer == 1 || this.stateTimer == 15) {
-            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 1.2f, 0.9f + this.random.nextFloat() * 0.2f);
+        // 羽音は打ち下ろしの拍（上る 0.77 秒＝15 tick。動きは 0.35 秒から打ち始める）
+        if (this.stateTimer >= 8 && (this.stateTimer - 8) % CLIMB_FLAP_TICKS == 0 && this.stateTimer < TAKEOFF_TICKS - 4) {
+            this.playSound(ModSounds.SHEARWATER_FLAP.get(), 1.2f, 0.8f + this.random.nextFloat() * 0.15f);
         }
         Vec3 forward = this.getLookAngle().multiply(1.0, 0.0, 1.0).normalize();
-        double up = this.stateTimer < 12 ? 0.04 : 0.16;
+        // 最初の 0.8 秒は水面を走る（ほぼ上がらない）。そこから昇る（動きの側では胴を上げない）
+        double up = this.stateTimer < 16 ? 0.03 : 0.14;
         this.setDeltaMovement(forward.scale(0.22).add(0.0, up, 0.0));
         if (this.stateTimer > TAKEOFF_TICKS) {
             setState(FLY);
