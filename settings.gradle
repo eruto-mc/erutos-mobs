@@ -2,6 +2,8 @@ pluginManagement {
     repositories {
         gradlePluginPortal()
         maven { url = 'https://maven.minecraftforge.net/' }
+        // MixinGradle（GeckoLib の導入手順どおり。開発用の起動で GeckoLib の mixin の名前を開発用の名前へ読み替えさせる）
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
     }
 }
 

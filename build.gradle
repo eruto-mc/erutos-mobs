@@ -1,5 +1,8 @@
 plugins {
     id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    // ⚠ これが無いと runClient が起動の途中で落ちる（GeckoLib の TextureManagerMixin が当て先を見つけられない）。
+    //   GeckoLib の wiki「Installation (Geckolib4)」の Forge の節の手順。本番の jar には関係しない
+    id 'org.spongepowered.mixin' version '0.7.+'
 }
 
 version = '0.1.0'
