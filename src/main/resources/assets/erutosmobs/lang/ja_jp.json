@@ -3,6 +3,8 @@
   "item.erutosmobs.shearwater_spawn_egg": "ミズナギドリのスポーンエッグ",
   "item.erutosmobs.shearwater_feather": "ミズナギドリの風切羽",
   "item.erutosmobs.shearwater_feather.desc": "奇妙なポーションに入れると、嵐渡りのポーションになる",
+  "jei.erutosmobs.shearwater_feather.info": "ミズナギドリを倒すと必ず 1 枚落とす。ミズナギドリの近くの水面に生鱈・生鮭・熱帯魚を投げると、飛び込んで食べ、投げた人を 5 分信用してボートの横に並んで飛ぶ。終わりまで並んで飛ぶと、1 枚落としてくれる。奇妙なポーションに入れると嵐渡りのポーションになる（レッドストーンダストで長くなる）。",
+  "jei.erutosmobs.shearwater.info": "伝説の海鳥。広い海にごく稀に 1 体だけ湧き、雷雨の間は湧きやすい。海を行くボートの横に並んで飛び、並ぶ間は嵐渡り（雷に打たれない・泳ぎとボートが速い）を分ける。傷つけた人は嵐の怒りを買う。",
   "effect.erutosmobs.storm_crossing": "嵐渡り",
   "effect.erutosmobs.storm_crossing.description": "雷に打たれない。泳ぐのが速くなり、水の上でボートが速くなる。",
   "effect.erutosmobs.storm_wrath": "嵐の怒り",

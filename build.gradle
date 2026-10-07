@@ -34,11 +34,18 @@ minecraft {
 repositories {
     // GeckoLib（サーバに 4.8.4 が入っている。動きは GeckoLib の JSON で持つ）
     maven { url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/' }
+    // JEI（無くても動く。在れば風切羽とスポーンエッグに説明の頁を足す。compat/ErutosMobsJeiPlugin）
+    maven { url 'https://maven.blamejared.com/' }
 }
 
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.3.0'
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-1.20.1:${geckolib_version}")
+    compileOnly fg.deobf("mezz.jei:jei-1.20.1-common-api:${jei_version}")
+    compileOnly fg.deobf("mezz.jei:jei-1.20.1-forge-api:${jei_version}")
+    // ⚠ 「@jar」で、配られている jar（部品を中に取り込んだ物）を取る。付けないと gradle は取り込んでいない版（-unshaded）を選び、
+    //   JEI 自身の部品が無いと ERROR が出た（ClassNotFoundException: net.mezzdev.bakedsubstring.BakedSubstringIndex）
+    runtimeOnly fg.deobf("mezz.jei:jei-1.20.1-forge:${jei_version}@jar")
 }
 
 jar {

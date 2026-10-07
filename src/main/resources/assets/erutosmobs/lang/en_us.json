@@ -3,6 +3,8 @@
   "item.erutosmobs.shearwater_spawn_egg": "Shearwater Spawn Egg",
   "item.erutosmobs.shearwater_feather": "Shearwater Flight Feather",
   "item.erutosmobs.shearwater_feather.desc": "Brew into an Awkward Potion for Storm Crossing",
+  "jei.erutosmobs.shearwater_feather.info": "A shearwater always drops one when it dies. Throw a raw cod, salmon or tropical fish on the water near one: it dives to eat it, trusts you for 5 minutes and flies alongside your boat. If it flies with you to the end, it drops a feather for you. Brew it into an Awkward Potion for Storm Crossing (add redstone for a longer one).",
+  "jei.erutosmobs.shearwater.info": "A legendary seabird. Only one appears in a wide area of ocean, more often during thunderstorms. It flies alongside boats at sea and shares Storm Crossing with you while it does (lightning does not strike you; swimming and boats are faster). Whoever hurts it earns the Storm's Wrath.",
   "effect.erutosmobs.storm_crossing": "Storm Crossing",
   "effect.erutosmobs.storm_crossing.description": "Lightning does not strike you. You swim faster, and your boat goes faster on water.",
   "effect.erutosmobs.storm_wrath": "Storm's Wrath",
