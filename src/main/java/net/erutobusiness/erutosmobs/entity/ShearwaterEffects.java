@@ -1,6 +1,8 @@
 package net.erutobusiness.erutosmobs.entity;
 
+import net.erutobusiness.erutosmobs.client.ShearwaterSounds;
 import net.erutobusiness.erutosmobs.registry.ModParticles;
+import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
@@ -36,13 +38,18 @@ import java.util.List;
  *   水滴       … 水から飛び立った後の 5 秒、翼の後縁から落ちる
  *   航跡       … 水面を漕いで進むとき、胴の後ろへ八の字に開く泡（実物の幅 0.5〜1 m × 11 → 6〜8 ブロック）
  *   着水       … 急降下から水面に入った瞬間の大きなしぶきと泡の輪（半径 1〜3.5 ブロック）
+ * 鳴らす音（2026-10-08。音は手元の音の道具 wavs が作る）:
+ *   波を切る水の音（翼端が水に触れている間 0.7 秒おき）・帯電のパチパチ（帯電中 0.6〜1.6 秒おき）・
+ *   近くを飛び過ぎる風切り（{@link ShearwaterSounds#flyby}。この画面の人を見て決める）
  */
 final class ShearwaterEffects {
     private final ShearwaterEntity bird;
     private int lastState = -1;
     private int stateTicks;
     private int wetTicks;
-    private int splashSoundCooldown;
+    private int shearSoundCooldown;
+    private int crackleCooldown;
+    private int flybyCooldown;
     private boolean takeoffFromWater;
     /** 前の tick の翼端（世界の座標）。風の筋と泡の線を途切れさせないため。飛んでいない間は null */
     private double[] lastTipL;
@@ -63,8 +70,14 @@ final class ShearwaterEffects {
         } else {
             this.stateTicks++;
         }
-        if (this.splashSoundCooldown > 0) {
-            this.splashSoundCooldown--;
+        if (this.shearSoundCooldown > 0) {
+            this.shearSoundCooldown--;
+        }
+        // 近くを飛び過ぎる風切り（聞き手を見て決めるので画面の側のクラスで。鳴らしたら 3 秒は鳴らさない）
+        if (this.flybyCooldown > 0) {
+            this.flybyCooldown--;
+        } else if ((st == ShearwaterEntity.FLY || st == ShearwaterEntity.GLIDE) && ShearwaterSounds.flyby(this.bird)) {
+            this.flybyCooldown = 60;
         }
         float yaw = this.bird.yBodyRot;
         double dx = this.bird.getX() - this.bird.xo;
@@ -96,6 +109,12 @@ final class ShearwaterEffects {
             }
             if (r.nextInt(10) == 0) {
                 leadingArc(level, r, yaw);
+            }
+            // 帯電のパチパチ（0.8 秒の音を 0.6〜1.6 秒おきに）
+            if (--this.crackleCooldown <= 0) {
+                level.playLocalSound(this.bird.getX(), this.bird.getY() + 1.0, this.bird.getZ(), ModSounds.SHEARWATER_CRACKLE.get(),
+                        SoundSource.NEUTRAL, 1.0f, 0.85f + r.nextFloat() * 0.35f, false);
+                this.crackleCooldown = 12 + r.nextInt(20);
             }
         } else if (level.isThundering() && r.nextInt(12) == 0) {
             edgeArc(level, r, yaw);
@@ -219,10 +238,11 @@ final class ShearwaterEffects {
             level.addParticle(ModParticles.FOAM.get(), from[0] + (tip[0] - from[0]) * u + (r.nextDouble() - 0.5) * 0.3,
                     surface + 0.02, from[2] + (tip[2] - from[2]) * u + (r.nextDouble() - 0.5) * 0.3, 0.0, 0.0, 0.0);
         }
-        if (this.splashSoundCooldown == 0) {
-            level.playLocalSound(tip[0], surface, tip[2], SoundEvents.GENERIC_SPLASH, SoundSource.NEUTRAL,
-                    0.6f, 1.1f + r.nextFloat() * 0.3f, false);
-            this.splashSoundCooldown = 8;
+        // 波を切る水の音（1 秒の音を 0.7 秒おき。両の翼端が水に触れても重ねない）。前はバニラの水しぶきの音だった
+        if (this.shearSoundCooldown == 0) {
+            level.playLocalSound(tip[0], surface, tip[2], ModSounds.SHEARWATER_SHEAR.get(), SoundSource.NEUTRAL,
+                    0.9f, 0.9f + r.nextFloat() * 0.25f, false);
+            this.shearSoundCooldown = 14;
         }
     }
 

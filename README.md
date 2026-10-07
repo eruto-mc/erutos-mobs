@@ -5,6 +5,8 @@
 第一号は **ミズナギドリ**。海域にごく稀に 1 体だけ湧く伝説の海鳥で、海の上を滑空と羽ばたきで巡り、
 ときどき水面すれすれに傾いて翼端で波を切る。水面に降りて浮き、夜は水面で眠り、飛び立つときは助走する。
 嵐の側の生き物なので、夜と雷雨で体の縁が光り、雷雨の中では自分へ雷を呼んで帯電する。
+海を行くボートの横に並んで飛び、水面に投げた魚へ飛び込んで食べる。並んで飛ぶ間は「嵐渡り」を分け、
+魚をくれた人には風切羽をくれる。傷つけた人は「嵐の怒り」を買う。
 
 ## 作り
 
@@ -18,7 +20,7 @@
 | 粒子の出どころ | `entity/ShearwaterLocators.java`（翼の骨と、その骨から見た翼端・後縁・前縁の点。足の位置） | mc-model-kit が模型から計算して書く。手で直さない。`ShearwaterRenderer` が描くたびに骨の行列へ点を掛けて、羽ばたいている間も翼の上から出す |
 | 伝説のしるし（道具・効果・薬・進捗） | `item/`・`effect/`・`brewing/PotionMix.java`・`registry/Mod{Effects,Potions}.java`・`advancement/`・`client/BoatBoost.java`・`ModEvents.java`・`data/erutosmobs/advancements/shearwater/` | この MOD。風切羽の道具の絵は風切羽の粒子と同じ物、効果の絵（`textures/mob_effect/`）は mc-model-kit が塗る |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
-| 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声） | 手元の音の道具 wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
+| 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声。飛び過ぎる風切り・波を切る水・帯電のパチパチ） | 手元の音の道具 wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
 
 ## 状態と動き
 
@@ -60,6 +62,17 @@
 
 進捗の引き金は `erutosmobs:shearwater`（条件は `{"event": "seen"}` など 6 つ。`advancement/ShearwaterTrigger.java`）。
 羽根を持つ・効果を得るはバニラの引き金（`inventory_changed`・`effects_changed`）で見る。
+
+## 音
+
+| 音 | いつ | 字幕 |
+| - | - | - |
+| 声 | 30〜100 秒ごと（飛んでいる昼は 4 回に 1 回。夜と雷雨は毎回）・帯電したとき・羽根をくれたとき | ミズナギドリが鳴く |
+| 羽音 | 羽ばたく 1 打ごと | ミズナギドリの羽ばたき |
+| 飛び過ぎる風切り | 速く飛ぶ鳥が、自分の 10 ブロック以内を通る 0.3〜0.7 秒前（近づくと高く、離れると低い。鳥について動く） | ミズナギドリが風を切って過ぎる |
+| 波を切る水 | 翼端が水面に触れている間、0.7 秒おき | 翼の先が波を切る |
+| 帯電のパチパチ | 帯電している間、0.6〜1.6 秒おき | ミズナギドリの火花がはじける |
+| 被弾・死 | 殴られた・倒れた | ミズナギドリが傷つく・倒れる |
 
 ## 設定
 

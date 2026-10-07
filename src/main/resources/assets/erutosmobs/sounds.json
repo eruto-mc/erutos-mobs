@@ -14,5 +14,17 @@
   "shearwater_flap": {
     "subtitle": "subtitles.erutosmobs.shearwater_flap",
     "sounds": ["erutosmobs:shearwater_flap_0"]
+  },
+  "shearwater_flyby": {
+    "subtitle": "subtitles.erutosmobs.shearwater_flyby",
+    "sounds": ["erutosmobs:shearwater_flyby_0"]
+  },
+  "shearwater_shear": {
+    "subtitle": "subtitles.erutosmobs.shearwater_shear",
+    "sounds": ["erutosmobs:shearwater_shear_0"]
+  },
+  "shearwater_crackle": {
+    "subtitle": "subtitles.erutosmobs.shearwater_crackle",
+    "sounds": ["erutosmobs:shearwater_crackle_0"]
   }
 }
