@@ -197,7 +197,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     }
 
     /**
-     * 湧きの稀さ。海面（水）・空が見える・25 回に 1 回・192 ブロック以内に同族が居ない。
+     * 湧きの稀さ。海面（水）・空が見える・25 回に 1 回（雷雨の間は 5 回に 1 回）・192 ブロック以内に同族が居ない。
      * スポーンエッグとスポナーはそのまま通す。
      */
     public static boolean checkShearwaterSpawn(EntityType<ShearwaterEntity> type, ServerLevelAccessor level,
@@ -209,6 +209,10 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             return false;
         }
         int oneIn = ErutosMobsConfig.SHEARWATER_SPAWN_ONE_IN.get();
+        // 嵐の主なので、雷雨の間は出やすい（既定 5 倍。同族との間合いはそのまま）
+        if (level.getLevel().isThundering()) {
+            oneIn = Math.max(1, oneIn / ErutosMobsConfig.SHEARWATER_STORM_SPAWN_BOOST.get());
+        }
         if (oneIn > 1 && random.nextInt(oneIn) != 0) {
             return false;
         }

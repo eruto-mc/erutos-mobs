@@ -1,9 +1,11 @@
 package net.erutobusiness.erutosmobs.entity;
 
+import net.erutobusiness.erutosmobs.client.ParticleBudget;
 import net.erutobusiness.erutosmobs.client.ShearwaterSounds;
 import net.erutobusiness.erutosmobs.registry.ModParticles;
 import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -35,7 +37,8 @@ import java.util.List;
  *                前縁を肩から翼端まで走る長い稲妻（10 tick に 1 本）。雷雨だけなら後縁の稲妻をときどき。
  *                どれも白い芯の帯を折れ線につなぎ、折れ目に光の点を置く（2〜4 tick で消え、次の tick に別の所へ出る）
  *   足の水しぶき … 水面からの離陸で、足が水を蹴る拍に（実物 20 cm × 11 → 幅 2 ブロックほど）
- *   水滴       … 水から飛び立った後の 5 秒、翼の後縁から落ちる
+ *   水滴       … 水から飛び立った後の 5 秒、翼の後縁から落ちる。雨の中を飛ぶ間も、少なめに落ちる
+ * 粒子の量は各自の設定 `particleAmount` とゲームの「パーティクル」の設定で間引く（{@link ParticleBudget}）。
  *   航跡       … 水面を漕いで進むとき、胴の後ろへ八の字に開く泡（実物の幅 0.5〜1 m × 11 → 6〜8 ブロック）
  *   着水       … 急降下から水面に入った瞬間の大きなしぶきと泡の輪（半径 1〜3.5 ブロック）
  * 鳴らす音（2026-10-08。音は手元の音の道具 wavs が作る）:
@@ -47,6 +50,8 @@ final class ShearwaterEffects {
     private int lastState = -1;
     private int stateTicks;
     private int wetTicks;
+    /** この tick に粒子を出す割合（0〜1。{@link ParticleBudget}） */
+    private float budget = 1.0f;
     private int shearSoundCooldown;
     private int crackleCooldown;
     private int flybyCooldown;
@@ -62,6 +67,7 @@ final class ShearwaterEffects {
     void tick() {
         Level level = this.bird.level();
         RandomSource r = this.bird.getRandom();
+        this.budget = ParticleBudget.amount();
         int st = this.bird.getState();
         if (st != this.lastState) {
             onChange(level, r, this.lastState, st);
@@ -98,16 +104,18 @@ final class ShearwaterEffects {
             this.lastTipR = null;
         }
 
-        // 嵐の火花
+        // 嵐の火花（間引くときは稲妻 1 本ずつ。帯を途中で欠けさせない）
         if (this.bird.isCharged()) {
             int n = 1 + r.nextInt(2);
             for (int i = 0; i < n; i++) {
-                edgeArc(level, r, yaw);
+                if (roll()) {
+                    edgeArc(level, r, yaw);
+                }
             }
-            if (r.nextInt(3) == 0) {
+            if (r.nextInt(3) == 0 && roll()) {
                 discharge(level, r, yaw);
             }
-            if (r.nextInt(10) == 0) {
+            if (r.nextInt(10) == 0 && roll()) {
                 leadingArc(level, r, yaw);
             }
             // 帯電のパチパチ（0.8 秒の音を 0.6〜1.6 秒おきに）
@@ -116,8 +124,21 @@ final class ShearwaterEffects {
                         SoundSource.NEUTRAL, 1.0f, 0.85f + r.nextFloat() * 0.35f, false);
                 this.crackleCooldown = 12 + r.nextInt(20);
             }
-        } else if (level.isThundering() && r.nextInt(12) == 0) {
+        } else if (level.isThundering() && r.nextInt(12) == 0 && roll()) {
             edgeArc(level, r, yaw);
+        }
+
+        // 雨の滴: 雨の中を飛ぶ間、翼の後縁から細い滴が落ち、ときどき大きな滴が混ざる（飛び立った後の水滴より少なめ）
+        if ((st == ShearwaterEntity.FLY || st == ShearwaterEntity.GLIDE || st == ShearwaterEntity.HOVER) && this.wetTicks == 0
+                && level.isRainingAt(BlockPos.containing(this.bird.getX(), this.bird.getY() + 2.0, this.bird.getZ()))) {
+            for (int i = 0; i < 2; i++) {
+                double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
+                add(level, ParticleTypes.FALLING_WATER, w[0], w[1] - 0.05, w[2], 0.0, 0.0, 0.0);
+            }
+            if (r.nextInt(8) == 0) {
+                double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
+                add(level, ModParticles.SPRAY.get(), w[0], w[1] - 0.1, w[2], 0.0, -0.05, 0.0);
+            }
         }
 
         // 足の水しぶき（離陸の走り。動きは 2 秒で 3 周＝6 歩 → 約 6.7 tick ごと）
@@ -136,11 +157,11 @@ final class ShearwaterEffects {
             this.wetTicks--;
             for (int i = 0; i < 4; i++) {
                 double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
-                level.addParticle(ParticleTypes.FALLING_WATER, w[0], w[1] - 0.05, w[2], 0.0, 0.0, 0.0);
+                add(level, ParticleTypes.FALLING_WATER, w[0], w[1] - 0.05, w[2], 0.0, 0.0, 0.0);
             }
             if (r.nextInt(4) == 0) {
                 double[] w = edge(r.nextInt(2), r.nextInt(ShearwaterLocators.EDGE_PER_SIDE), yaw);
-                level.addParticle(ModParticles.SPRAY.get(), w[0], w[1] - 0.1, w[2], 0.0, -0.05, 0.0);
+                add(level, ModParticles.SPRAY.get(), w[0], w[1] - 0.1, w[2], 0.0, -0.05, 0.0);
             }
         }
 
@@ -151,14 +172,14 @@ final class ShearwaterEffects {
                 double[] p = at(new double[] {side * (0.8 + back * 0.55), 0.3, -back}, yaw);
                 double surface = surfaceNear(level, p);
                 if (!Double.isNaN(surface)) {
-                    level.addParticle(ModParticles.FOAM.get(), p[0], surface + 0.02, p[2], 0.0, 0.0, 0.0);
+                    add(level, ModParticles.FOAM.get(), p[0], surface + 0.02, p[2], 0.0, 0.0, 0.0);
                 }
             }
             if (speed > 0.04 && r.nextInt(2) == 0) {
                 double[] bow = at(new double[] {0.0, 0.3, 2.2}, yaw);
                 double surface = surfaceNear(level, bow);
                 if (!Double.isNaN(surface)) {
-                    level.addParticle(ModParticles.SPRAY.get(), bow[0], surface + 0.05, bow[2],
+                    add(level, ModParticles.SPRAY.get(), bow[0], surface + 0.05, bow[2],
                             (r.nextDouble() - 0.5) * 0.1, 0.2, (r.nextDouble() - 0.5) * 0.1);
                 }
             }
@@ -174,19 +195,19 @@ final class ShearwaterEffects {
                 for (int i = 0; i < 24; i++) {
                     double a = r.nextDouble() * Math.PI * 2.0;
                     double rad = 1.0 + r.nextDouble() * 2.5;
-                    level.addParticle(ModParticles.SPRAY.get(), c[0] + Math.cos(a) * rad, surface + 0.1,
+                    add(level, ModParticles.SPRAY.get(), c[0] + Math.cos(a) * rad, surface + 0.1,
                             c[2] + Math.sin(a) * rad, Math.cos(a) * 0.12, 0.3 + r.nextDouble() * 0.2,
                             Math.sin(a) * 0.12);
                 }
                 for (int i = 0; i < 14; i++) {
                     double a = i / 14.0 * Math.PI * 2.0;
                     double rad = 2.5 + r.nextDouble() * 1.0;
-                    level.addParticle(ModParticles.FOAM.get(), c[0] + Math.cos(a) * rad, surface + 0.02,
+                    add(level, ModParticles.FOAM.get(), c[0] + Math.cos(a) * rad, surface + 0.02,
                             c[2] + Math.sin(a) * rad, 0.0, 0.0, 0.0);
                 }
                 burst(level, r, c[0], surface, c[2], 0, 50, 6.0, 0.3);
                 for (int i = 0; i < 20; i++) {
-                    level.addParticle(ParticleTypes.BUBBLE, c[0] + (r.nextDouble() - 0.5) * 5.0, surface - 0.6,
+                    add(level, ParticleTypes.BUBBLE, c[0] + (r.nextDouble() - 0.5) * 5.0, surface - 0.6,
                             c[2] + (r.nextDouble() - 0.5) * 5.0, 0.0, 0.05, 0.0);
                 }
                 level.playLocalSound(c[0], surface, c[2], SoundEvents.GENERIC_SPLASH, SoundSource.NEUTRAL,
@@ -224,18 +245,18 @@ final class ShearwaterEffects {
         double on = Math.max(Math.sqrt(ox * ox + oz * oz), 1.0E-3);
         for (int i = 0; i < 5; i++) {
             double out = 0.04 + r.nextDouble() * 0.10;
-            level.addParticle(ModParticles.SPRAY.get(), tip[0] + (r.nextDouble() - 0.5) * 0.6, surface + 0.1,
+            add(level, ModParticles.SPRAY.get(), tip[0] + (r.nextDouble() - 0.5) * 0.6, surface + 0.1,
                     tip[2] + (r.nextDouble() - 0.5) * 0.6, ox / on * out + dx * 0.15, 0.48 + r.nextDouble() * 0.12,
                     oz / on * out + dz * 0.15);
         }
         for (int i = 0; i < 4; i++) {
-            level.addParticle(ParticleTypes.SPLASH, tip[0] + (r.nextDouble() - 0.5) * 1.5, surface + 0.05,
+            add(level, ParticleTypes.SPLASH, tip[0] + (r.nextDouble() - 0.5) * 1.5, surface + 0.05,
                     tip[2] + (r.nextDouble() - 0.5) * 1.5, 0.0, 0.2, 0.0);
         }
         double[] from = last != null ? last : tip;
         for (int k = 1; k <= 3; k++) {
             double u = k / 3.0;
-            level.addParticle(ModParticles.FOAM.get(), from[0] + (tip[0] - from[0]) * u + (r.nextDouble() - 0.5) * 0.3,
+            add(level, ModParticles.FOAM.get(), from[0] + (tip[0] - from[0]) * u + (r.nextDouble() - 0.5) * 0.3,
                     surface + 0.02, from[2] + (tip[2] - from[2]) * u + (r.nextDouble() - 0.5) * 0.3, 0.0, 0.0, 0.0);
         }
         // 波を切る水の音（1 秒の音を 0.7 秒おき。両の翼端が水に触れても重ねない）。前はバニラの水しぶきの音だった
@@ -246,33 +267,45 @@ final class ShearwaterEffects {
         }
     }
 
+    /** 粒子 1 つ。各自の設定とゲームの「パーティクル」の設定で間引く（{@link ParticleBudget}） */
+    private void add(Level level, ParticleOptions p, double x, double y, double z, double vx, double vy, double vz) {
+        if (roll()) {
+            level.addParticle(p, x, y, z, vx, vy, vz);
+        }
+    }
+
+    /** 出すか（間引かない設定なら必ず出す） */
+    private boolean roll() {
+        return this.budget >= 1.0f || this.bird.getRandom().nextFloat() < this.budget;
+    }
+
     /** 風の筋: from から to まで 3 つ並べる（from が無ければ to に 1 つ） */
-    private static void trail(Level level, @Nullable double[] from, double[] to) {
+    private void trail(Level level, @Nullable double[] from, double[] to) {
         if (from == null) {
-            level.addParticle(ModParticles.MIST.get(), to[0], to[1], to[2], 0.0, 0.0, 0.0);
+            add(level, ModParticles.MIST.get(), to[0], to[1], to[2], 0.0, 0.0, 0.0);
             return;
         }
         for (int k = 1; k <= 3; k++) {
             double u = k / 3.0;
-            level.addParticle(ModParticles.MIST.get(), from[0] + (to[0] - from[0]) * u, from[1] + (to[1] - from[1]) * u,
+            add(level, ModParticles.MIST.get(), from[0] + (to[0] - from[0]) * u, from[1] + (to[1] - from[1]) * u,
                     from[2] + (to[2] - from[2]) * u, 0.0, 0.0, 0.0);
         }
     }
 
     /** しぶき: 大きな塊 big 個（上へ up）と細かな滴 small 個を幅 spread に散らし、水面に泡を残す */
-    private static void burst(Level level, RandomSource r, double x, double surface, double z, int big, int small,
+    private void burst(Level level, RandomSource r, double x, double surface, double z, int big, int small,
                               double spread, double up) {
         for (int i = 0; i < big; i++) {
-            level.addParticle(ModParticles.SPRAY.get(), x + (r.nextDouble() - 0.5) * spread * 0.5, surface + 0.1,
+            add(level, ModParticles.SPRAY.get(), x + (r.nextDouble() - 0.5) * spread * 0.5, surface + 0.1,
                     z + (r.nextDouble() - 0.5) * spread * 0.5, (r.nextDouble() - 0.5) * 0.12,
                     up + r.nextDouble() * 0.1, (r.nextDouble() - 0.5) * 0.12);
         }
         for (int i = 0; i < small; i++) {
-            level.addParticle(ParticleTypes.SPLASH, x + (r.nextDouble() - 0.5) * spread, surface + 0.05,
+            add(level, ParticleTypes.SPLASH, x + (r.nextDouble() - 0.5) * spread, surface + 0.05,
                     z + (r.nextDouble() - 0.5) * spread, 0.0, 0.2, 0.0);
         }
         for (int i = 0; i < Math.max(2, small / 6); i++) {
-            level.addParticle(ModParticles.FOAM.get(), x + (r.nextDouble() - 0.5) * spread, surface + 0.02,
+            add(level, ModParticles.FOAM.get(), x + (r.nextDouble() - 0.5) * spread, surface + 0.02,
                     z + (r.nextDouble() - 0.5) * spread, 0.0, 0.0, 0.0);
         }
     }

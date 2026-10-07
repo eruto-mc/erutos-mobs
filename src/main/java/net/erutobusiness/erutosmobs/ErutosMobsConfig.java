@@ -12,6 +12,7 @@ public final class ErutosMobsConfig {
     public static final ForgeConfigSpec.IntValue SHEARWATER_MIN_DISTANCE;
     public static final ForgeConfigSpec.IntValue SHEARWATER_DESPAWN_DISTANCE;
     public static final ForgeConfigSpec.IntValue SHEARWATER_STORM_LIGHTNING_ONE_IN;
+    public static final ForgeConfigSpec.IntValue SHEARWATER_STORM_SPAWN_BOOST;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -29,6 +30,10 @@ public final class ErutosMobsConfig {
                 .comment("While flying in a thunderstorm, calls a visual-only lightning bolt onto itself one tick in N",
                         "(no fire, no damage; it becomes charged for a minute). 1800 = about every 90 s. 0 = never.")
                 .defineInRange("stormLightningOneIn", 1800, 0, 1000000);
+        SHEARWATER_STORM_SPAWN_BOOST = b
+                .comment("During a thunderstorm, spawnOneIn is divided by this (5 = five times as likely). 1 = no change.",
+                        "The minimum distance between shearwaters still applies.")
+                .defineInRange("stormSpawnBoost", 5, 1, 1000);
         b.pop();
         SPEC = b.build();
     }

@@ -51,6 +51,7 @@ public class ErutosMobs {
         bus.addListener(this::onSpawnPlacements);
         bus.addListener(this::onCreativeTab);
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, ErutosMobsConfig.SPEC, "erutosmobs-common.toml");
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ErutosMobsClientConfig.SPEC, "erutosmobs-client.toml");
     }
 
     /**
