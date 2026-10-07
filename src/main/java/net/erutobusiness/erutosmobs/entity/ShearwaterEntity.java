@@ -1,11 +1,20 @@
 package net.erutobusiness.erutosmobs.entity;
 
 import net.erutobusiness.erutosmobs.ErutosMobsConfig;
+import net.erutobusiness.erutosmobs.advancement.ShearwaterTrigger;
+import net.erutobusiness.erutosmobs.effect.StormWrathEffect;
+import net.erutobusiness.erutosmobs.registry.ModEffects;
+import net.erutobusiness.erutosmobs.registry.ModItems;
 import net.erutobusiness.erutosmobs.registry.ModParticles;
 import net.erutobusiness.erutosmobs.registry.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityDimensions;
@@ -63,6 +72,8 @@ import java.util.UUID;
  *   夜は水面で眠る（SLEEP）／助走して飛び立つ（TAKEOFF）／ときどき水辺の浜へ降りて立ち、歩く（LAND → STAND / WALK）。
  * 人とのかかわり（実物は漁船に付いて飛び、捨てられた魚を拾う）: 海を行くボートの横に並んで飛ぶ（{@link FollowBoatGoal}）／
  *   水面に投げた生の魚へ飛び込んで食べ、投げた人を 5 分信用する（{@link FishLureGoal}）。
+ * 伝説のしるし: 倒すと風切羽を必ず落とす（嵐渡りのポーションの材料）。傷つけた人は嵐の怒りを買う（{@link StormWrathEffect}）。
+ *   近くで見た人には進捗を出す（{@link #tellWatchers}）。
  *
  * 動きの名前は mc-model-kit の 13 本（swim / glide / idle / dive / sleep / cry / hover / hurt / faint /
  * stand / walk / paddle / takeoff）。swim が羽ばたき、idle が空中の休止。
@@ -517,6 +528,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (this.chargeTicks > 0 && --this.chargeTicks == 0) {
             this.entityData.set(CHARGED, false);
         }
+        if (this.tickCount % 20 == 0) {
+            tellWatchers();
+        }
         // 嵐の主: 雷雨の中を飛んでいると、ときどき自分へ雷を呼ぶ（既定は 1 tick に 1/1800＝平均 90 秒に 1 回。
         //   設定 `stormLightningOneIn`、0 で無し）。⚠ 見た目だけの雷（setVisualOnly）なので、火も付かず誰も傷まない
         //   （`LightningBolt.tick` は visualOnly のとき当たり判定と着火を飛ばす）
@@ -530,6 +544,31 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
                 bolt.setVisualOnly(true);
                 this.level().addFreshEntity(bolt);
                 charge();
+            }
+        }
+    }
+
+    /**
+     * 見ている人の進捗（1 秒ごと）: 64 ブロック以内で目の通る人は「見た」、帯電していれば「帯電を見た」、
+     * 翼端で波を切っている（波切りの滑空で、足元が水面の 1.5 ブロック以内）ときに 24 ブロック以内なら「波切りを近くで見た」
+     */
+    private void tellWatchers() {
+        if (!(this.level() instanceof ServerLevel sl)) {
+            return;
+        }
+        double sea = seaSurfaceAt(sl, this.getBlockX(), this.getBlockZ());
+        boolean shearing = isShearing() && !Double.isNaN(sea) && this.getY() - sea < 1.5;
+        for (ServerPlayer p : sl.players()) {
+            double d2 = p.distanceToSqr(this);
+            if (p.isSpectator() || d2 > 64.0 * 64.0 || !p.hasLineOfSight(this)) {
+                continue;
+            }
+            ShearwaterTrigger.INSTANCE.trigger(p, ShearwaterTrigger.SEEN);
+            if (isCharged()) {
+                ShearwaterTrigger.INSTANCE.trigger(p, ShearwaterTrigger.SEEN_CHARGED);
+            }
+            if (shearing && d2 < 24.0 * 24.0) {
+                ShearwaterTrigger.INSTANCE.trigger(p, ShearwaterTrigger.SHEAR_NEAR);
             }
         }
     }
@@ -823,6 +862,33 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         return this.trustTicks > 0 && player.getUUID().equals(this.trustedPlayer);
     }
 
+    /** 嵐の怒りを買っている人か（{@link StormWrathEffect}。船に付かず、その人の魚も取らない） */
+    static boolean wrathful(@Nullable Entity e) {
+        return e instanceof Player p && p.hasEffect(ModEffects.STORM_WRATH.get());
+    }
+
+    /**
+     * 並んで飛び終えたとき、信用している人へ風切羽を 1 枚落とす（{@link FollowBoatGoal}）。
+     * 羽根は人の頭の 2 ブロック上から、ゆっくり落ちる（鳥は 9〜13 ブロック横にいるので、鳥の所から落とすと海に浮いて拾いに行けない）
+     */
+    void giveFeather(Player player) {
+        if (!(this.level() instanceof ServerLevel sl)) {
+            return;
+        }
+        ItemEntity item = new ItemEntity(sl, player.getX(), player.getY() + 2.2, player.getZ(),
+                new ItemStack(ModItems.SHEARWATER_FEATHER.get()));
+        item.setDeltaMovement(0.0, -0.05, 0.0);
+        item.setDefaultPickUpDelay();
+        sl.addFreshEntity(item);
+        // ⚠ 風切羽の粒子（幅 2 ブロック前後）を人の頭上に出したら、カメラのすぐ前で剣のように画面をふさいだ
+        //   （2026-10-08 に撮った）。人のそばでは体の羽（幅 0.5〜0.8）にする
+        sl.sendParticles(ModParticles.FEATHER.get(), player.getX(), player.getY() + 2.6, player.getZ(), 8, 0.8, 0.3, 0.8, 0.02);
+        cry();
+        if (player instanceof ServerPlayer sp) {
+            ShearwaterTrigger.INSTANCE.trigger(sp, ShearwaterTrigger.GIFT);
+        }
+    }
+
     /** 人が近くても、しばらく水面から飛び立たない（魚を食べているところを見せる） */
     void calmFor(int ticks) {
         this.calmTicks = ticks;
@@ -907,10 +973,13 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             if (st == PADDLE || st == SLEEP || st == DIVE) {
                 beginTakeoff();
             }
-            // 信用していた人に殴られたら忘れる（船にも付いてこなくなる）
-            if (source.getEntity() instanceof Player p && trusts(p)) {
-                this.trustTicks = 0;
-                this.trustedPlayer = null;
+            // 傷つけた人は嵐の怒りを買う（5 分）。信用していた人なら忘れる（船にも付いてこなくなる）
+            if (source.getEntity() instanceof Player p) {
+                p.addEffect(new MobEffectInstance(ModEffects.STORM_WRATH.get(), StormWrathEffect.durationFor(false)));
+                if (trusts(p)) {
+                    this.trustTicks = 0;
+                    this.trustedPlayer = null;
+                }
             }
         }
         return ok;
@@ -919,6 +988,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     @Override
     public void die(DamageSource source) {
         super.die(source);
+        if (source.getEntity() instanceof Player p && !this.level().isClientSide()) {
+            p.addEffect(new MobEffectInstance(ModEffects.STORM_WRATH.get(), StormWrathEffect.durationFor(true)));
+        }
         if (this.level() instanceof ServerLevel sl) {
             triggerAnim("main", "faint");
             sl.sendParticles(ModParticles.FEATHER.get(), this.getX(), this.getY() + 1.0, this.getZ(),

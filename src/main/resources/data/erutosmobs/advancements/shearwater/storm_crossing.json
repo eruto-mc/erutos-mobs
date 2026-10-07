@@ -1,0 +1,29 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:potion",
+      "nbt": "{Potion:\"erutosmobs:storm_crossing\"}"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.storm_crossing.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.storm_crossing.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "erutosmobs:shearwater/feather",
+  "criteria": {
+    "storm_crossing": {
+      "trigger": "minecraft:effects_changed",
+      "conditions": {
+        "effects": {
+          "erutosmobs:storm_crossing": {}
+        }
+      }
+    }
+  }
+}

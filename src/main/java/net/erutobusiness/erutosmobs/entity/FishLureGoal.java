@@ -1,6 +1,8 @@
 package net.erutobusiness.erutosmobs.entity;
 
+import net.erutobusiness.erutosmobs.advancement.ShearwaterTrigger;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.core.particles.ItemParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
@@ -29,6 +31,7 @@ import java.util.List;
  * 投げた人（品物の持ち主）を 5 分信用し、その人の船には付いて飛びやすくなる（{@link FollowBoatGoal}）。
  * 食べた後は 3 秒だけ、人が近くても浮いたまま（その後はいつもどおり、人が 6 ブロックに来たら飛び立つ）。
  * 近づく間に魚が消えたら（拾われた・消えた）やめる。食べてから 5 秒は次の魚を探さない。
+ * 嵐の怒りを買っている人が投げた魚は取らない。
  */
 class FishLureGoal extends Goal {
     private static final double SEARCH = 32.0;
@@ -77,7 +80,8 @@ class FishLureGoal extends Goal {
             return false;
         }
         List<ItemEntity> found = this.bird.level().getEntitiesOfClass(ItemEntity.class,
-                this.bird.getBoundingBox().inflate(SEARCH, 24.0, SEARCH), e -> e.isAlive() && isFish(e.getItem()) && floating(e));
+                this.bird.getBoundingBox().inflate(SEARCH, 24.0, SEARCH),
+                e -> e.isAlive() && isFish(e.getItem()) && floating(e) && !ShearwaterEntity.wrathful(e.getOwner()));
         ItemEntity best = null;
         double bestD = Double.MAX_VALUE;
         for (ItemEntity e : found) {
@@ -181,6 +185,9 @@ class FishLureGoal extends Goal {
         }
         if (owner instanceof Player p) {
             this.bird.trust(p);
+            if (p instanceof ServerPlayer sp) {
+                ShearwaterTrigger.INSTANCE.trigger(sp, ShearwaterTrigger.FED);
+            }
             // ⚠ 食べた後にいつもどおり 15〜45 秒浮いていると、くれた人が船で行ってしまってから飛び立つ（2026-10-07 に試して、
             //   付いて飛ぶのが 30 秒遅れた）。くれた人がいるときは 3〜4 秒だけ浮いて飛び立つ
             this.bird.restBriefly(60 + this.bird.getRandom().nextInt(21));

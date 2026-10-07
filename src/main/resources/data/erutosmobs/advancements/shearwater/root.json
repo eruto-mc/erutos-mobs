@@ -1,0 +1,26 @@
+{
+  "display": {
+    "icon": {
+      "item": "erutosmobs:shearwater_feather"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.root.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.root.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false,
+    "background": "minecraft:textures/block/dark_prismarine.png"
+  },
+  "criteria": {
+    "seen": {
+      "trigger": "erutosmobs:shearwater",
+      "conditions": {
+        "event": "seen"
+      }
+    }
+  }
+}

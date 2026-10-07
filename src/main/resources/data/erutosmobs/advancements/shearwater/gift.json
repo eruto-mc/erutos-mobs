@@ -1,0 +1,26 @@
+{
+  "display": {
+    "icon": {
+      "item": "erutosmobs:shearwater_feather"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.gift.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.gift.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "erutosmobs:shearwater/followed",
+  "criteria": {
+    "gift": {
+      "trigger": "erutosmobs:shearwater",
+      "conditions": {
+        "event": "gift"
+      }
+    }
+  }
+}

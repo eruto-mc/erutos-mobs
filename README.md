@@ -16,6 +16,7 @@
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
 | 光る層・粒子 | `client/ShearwaterGlowLayer.java`・`client/{Feather,Mist,Spray,Foam,Spark,Bolt}Particle.java`・`entity/ShearwaterEffects.java` | この MOD。光る部分の絵（`textures/entity/shearwater_glow.png`）と、羽根・しぶき・泡・火花・稲妻の帯の絵（`textures/particle/`）は mc-model-kit が塗る。風の筋だけバニラの煙の絵を使う。粒子の大きさは「実物 × 11」（翼幅 12 ブロックは実物 1.1 m の約 11 倍。1 ブロック ＝ 1 m）で決める |
 | 粒子の出どころ | `entity/ShearwaterLocators.java`（翼の骨と、その骨から見た翼端・後縁・前縁の点。足の位置） | mc-model-kit が模型から計算して書く。手で直さない。`ShearwaterRenderer` が描くたびに骨の行列へ点を掛けて、羽ばたいている間も翼の上から出す |
+| 伝説のしるし（道具・効果・薬・進捗） | `item/`・`effect/`・`brewing/PotionMix.java`・`registry/Mod{Effects,Potions}.java`・`advancement/`・`client/BoatBoost.java`・`ModEvents.java`・`data/erutosmobs/advancements/shearwater/` | この MOD。風切羽の道具の絵は風切羽の粒子と同じ物、効果の絵（`textures/mob_effect/`）は mc-model-kit が塗る |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
 | 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声） | 手元の音の道具 wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
 
@@ -47,6 +48,18 @@
 | 足の水しぶき・水滴 | 水面から飛び立つとき | 助走の足が水を蹴る拍に幅 1.2 ほどのしぶきと泡。飛び立ったあと 5 秒、翼の後縁から水滴が落ちる |
 | 航跡・着水 | 水面を漕ぐとき・降りて水に入った瞬間 | 胴の後ろへ八の字に開く泡の航跡（幅 6〜8）。着水は半径 1〜3.5 の大きなしぶきと泡の輪 |
 | 羽根 | 殴られたとき（体の羽 12・風切羽 2）・死んだとき（30・6） | 嵐色の羽根がゆっくり揺れながら舞い落ちる。体の羽は幅 0.5〜0.8、風切羽は 1.6〜2.2 ブロック |
+
+## 伝説のしるし
+
+| 何 | 手に入る・付くとき | 何が起きる |
+| - | - | - |
+| ミズナギドリの風切羽（道具） | 倒すと必ず 1 枚。魚をくれた人の船に、付き添いの終わりまで並んで飛べた鳥がくれる（人の頭の上から落ちてくる） | 奇妙なポーション ＋ 風切羽 → 嵐渡りのポーション（3 分）。＋ レッドストーンダスト → 8 分。スプラッシュ・残留・矢にもなる |
+| 嵐渡り（効果） | 嵐渡りのポーション。鳥が船の横に並んで飛ぶ間（15 秒ずつ足し直す） | 雷に打たれない（傷も火も無い）。泳ぐ速さ 1.5 倍。水の上で前へ漕ぐと、ボートの速さの上限が約 2 割上がる（測って 0.40 → 0.49 ブロック/tick） |
+| 嵐の怒り（効果） | 鳥を傷つけた人（5 分）・倒した人（20 分）。牛乳では消えない | 雷雨の間は平均 15 秒、鳥の 48 ブロック以内では晴れていても平均 20 秒に 1 回、4〜9 ブロック先に見た目だけの雷が落ちる。鳥はその人の船に付かず、その人が投げた魚も取らない |
+| 進捗（「嵐の海の主」のタブ） | 9 つ | 見る ／ 帯電を見る ／ 翼端で波を切るのを 24 ブロック以内で見る ／ 魚を食べさせる → 30 秒並んで飛んでもらう → 風切羽をもらう（挑戦） ／ 風切羽を手に入れる → 嵐渡りを得る ／ 嵐の怒りを買う（隠し） |
+
+進捗の引き金は `erutosmobs:shearwater`（条件は `{"event": "seen"}` など 6 つ。`advancement/ShearwaterTrigger.java`）。
+羽根を持つ・効果を得るはバニラの引き金（`inventory_changed`・`effects_changed`）で見る。
 
 ## 設定
 

@@ -1,6 +1,10 @@
 package net.erutobusiness.erutosmobs.entity;
 
+import net.erutobusiness.erutosmobs.advancement.ShearwaterTrigger;
+import net.erutobusiness.erutosmobs.registry.ModEffects;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.vehicle.Boat;
@@ -23,8 +27,10 @@ import java.util.EnumSet;
  *   回る    … 船がほぼ止まっていたら、船のまわりを半径 12 で、傾いたまま回る（翼端がずっと波を切る。{@link ShearPassGoal} と同じ回り方）
  * ふつうは見つけるたび（1 秒ごと）に 1/8 で付く。魚を食べさせた人（{@link FishLureGoal}）の船には、64 ブロック先からでも
  * 必ず付き、長く（最長 2 分）、近く（9〜13）並ぶ。
+ * 並ぶ間、その人に嵐渡り（{@link net.erutobusiness.erutosmobs.effect.StormCrossingEffect}）を分ける。
+ * 信用している人の船に終わりまで並べたら、風切羽を 1 枚くれる（{@link ShearwaterEntity#giveFeather}）。
  * 終わったら 2〜4 分（信用している人なら 1〜2 分）は付いてこない。船が陸へ上がる・人が降りる・64 より離れる・
- * その人に殴られる、でもやめる。
+ * その人に殴られる、でもやめる。嵐の怒りを買っている人の船には付かない。
  * ⚠ 人が漕ぐ船は、動きを漕ぐ人の画面の側が決めてサーバへ位置を送る。サーバの船の速度は当てにならないので、
  *   位置の差から速さを出す。
  */
@@ -90,7 +96,7 @@ class FollowBoatGoal extends Goal {
         Player best = null;
         double bestD = Double.MAX_VALUE;
         for (Player p : this.bird.level().players()) {
-            if (p.isSpectator() || !(p.getVehicle() instanceof Boat boat) || !onSea(boat)) {
+            if (p.isSpectator() || ShearwaterEntity.wrathful(p) || !(p.getVehicle() instanceof Boat boat) || !onSea(boat)) {
                 continue;
             }
             double d = horizontalDistSqr(boat.position());
@@ -138,7 +144,7 @@ class FollowBoatGoal extends Goal {
     @Override
     public boolean canContinueToUse() {
         Player p = this.player;
-        if (p == null || !p.isAlive() || !(p.getVehicle() instanceof Boat boat) || !onSea(boat)) {
+        if (p == null || !p.isAlive() || ShearwaterEntity.wrathful(p) || !(p.getVehicle() instanceof Boat boat) || !onSea(boat)) {
             return false;
         }
         if (this.time >= this.duration || !flying(this.bird.getState())
@@ -154,6 +160,12 @@ class FollowBoatGoal extends Goal {
         this.bird.followCooldown = this.trusted ? 1200 + this.bird.getRandom().nextInt(1201)
                 : 2400 + this.bird.getRandom().nextInt(2401);
         this.bird.holdGlide(0);
+        // 信用している人の船に終わりまで並べたら、風切羽を 1 枚くれる
+        Player p = this.player;
+        if (this.trusted && this.time >= this.duration && p != null && p.isAlive() && p.getVehicle() instanceof Boat
+                && this.bird.trusts(p)) {
+            this.bird.giveFeather(p);
+        }
         this.player = null;
     }
 
@@ -169,6 +181,13 @@ class FollowBoatGoal extends Goal {
             return;
         }
         this.time++;
+        // 並んで飛ぶ間は嵐渡り（雷に打たれない・泳ぎとボートが速い）を分ける。5 秒ごとに 15 秒ぶん足し直す
+        if (this.time % 100 == 1) {
+            p.addEffect(new MobEffectInstance(ModEffects.STORM_CROSSING.get(), 300, 0, true, true, true));
+        }
+        if (this.time == 600 && p instanceof ServerPlayer sp) {
+            ShearwaterTrigger.INSTANCE.trigger(sp, ShearwaterTrigger.FOLLOWED);
+        }
         Level level = this.bird.level();
         // 船の速さ（位置の差をならす）
         Vec3 pos = boat.position();

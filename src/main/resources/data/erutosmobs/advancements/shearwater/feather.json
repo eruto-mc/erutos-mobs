@@ -1,0 +1,32 @@
+{
+  "display": {
+    "icon": {
+      "item": "erutosmobs:shearwater_feather"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.feather.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.feather.description"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "erutosmobs:shearwater/root",
+  "criteria": {
+    "feather": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "erutosmobs:shearwater_feather"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

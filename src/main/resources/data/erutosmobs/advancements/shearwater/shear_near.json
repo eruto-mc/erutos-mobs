@@ -1,0 +1,26 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:prismarine_crystals"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.shear_near.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.shear_near.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "erutosmobs:shearwater/root",
+  "criteria": {
+    "shear_near": {
+      "trigger": "erutosmobs:shearwater",
+      "conditions": {
+        "event": "shear_near"
+      }
+    }
+  }
+}

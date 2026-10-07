@@ -1,0 +1,26 @@
+{
+  "display": {
+    "icon": {
+      "item": "minecraft:oak_boat"
+    },
+    "title": {
+      "translate": "advancements.erutosmobs.shearwater.followed.title"
+    },
+    "description": {
+      "translate": "advancements.erutosmobs.shearwater.followed.description"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "parent": "erutosmobs:shearwater/fed",
+  "criteria": {
+    "followed": {
+      "trigger": "erutosmobs:shearwater",
+      "conditions": {
+        "event": "followed"
+      }
+    }
+  }
+}
