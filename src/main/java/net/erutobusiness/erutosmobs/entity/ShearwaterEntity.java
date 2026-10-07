@@ -53,14 +53,16 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 
 import javax.annotation.Nullable;
 import java.util.EnumSet;
+import java.util.UUID;
 
 /**
  * ミズナギドリ — 嵐の海の主。伝説として海域にごく稀に 1 体。
  *
  * 実物の暮らし（ja.wikipedia「オオミズナギドリ」）を状態にした:
  *   海の上を滑空と羽ばたきで巡る（FLY / GLIDE）／餌を見る（HOVER）／水面へ降りて浮く（DIVE → PADDLE）／
- *   夜は水面で眠る（SLEEP）／助走して飛び立つ（TAKEOFF）。地面での立ち・歩き（STAND / WALK）は
- *   動きだけ用意してあり、浜へ降りる AI は次の版。
+ *   夜は水面で眠る（SLEEP）／助走して飛び立つ（TAKEOFF）／ときどき水辺の浜へ降りて立ち、歩く（LAND → STAND / WALK）。
+ * 人とのかかわり（実物は漁船に付いて飛び、捨てられた魚を拾う）: 海を行くボートの横に並んで飛ぶ（{@link FollowBoatGoal}）／
+ *   水面に投げた生の魚へ飛び込んで食べ、投げた人を 5 分信用する（{@link FishLureGoal}）。
  *
  * 動きの名前は mc-model-kit の 13 本（swim / glide / idle / dive / sleep / cry / hover / hurt / faint /
  * stand / walk / paddle / takeoff）。swim が羽ばたき、idle が空中の休止。
@@ -107,6 +109,15 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private int glideHold;
     /** 次に波を切ってよいまでの tick（{@link ShearPassGoal}） */
     int shearCooldown = 600;
+    /** 次に船へ付いて飛んでよいまでの tick（{@link FollowBoatGoal}） */
+    int followCooldown = 400;
+    /** 魚を食べさせてくれた人（{@link FishLureGoal}）。その人の船には付きやすい。{@link #TRUST_TICKS} で忘れる */
+    @Nullable
+    private UUID trustedPlayer;
+    private int trustTicks;
+    private static final int TRUST_TICKS = 6000;
+    /** 魚を食べた直後、人が近くても飛び立たない残り（食べているところを見せる） */
+    private int calmTicks;
     /**
      * 上り下りの傾き（度・正で上り＝鼻先が上）。クライアントだけで、位置の変化から決める（{@link #tick}）。
      * 描画（ShearwaterModel）が胴の回転に足す。ルギアの `q.pitch_tilt`（±45° で止める）と、
@@ -246,6 +257,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         tag.putInt("RestCooldown", this.restCooldown);
         tag.putInt("ChargeTicks", this.chargeTicks);
         tag.putInt("ShearCooldown", this.shearCooldown);
+        tag.putInt("FollowCooldown", this.followCooldown);
+        if (this.trustedPlayer != null && this.trustTicks > 0) {
+            tag.putUUID("TrustedPlayer", this.trustedPlayer);
+            tag.putInt("TrustTicks", this.trustTicks);
+        }
     }
 
     @Override
@@ -272,6 +288,13 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (tag.contains("ShearCooldown")) {
             this.shearCooldown = Math.max(0, tag.getInt("ShearCooldown"));
         }
+        if (tag.contains("FollowCooldown")) {
+            this.followCooldown = Math.max(0, tag.getInt("FollowCooldown"));
+        }
+        if (tag.hasUUID("TrustedPlayer")) {
+            this.trustedPlayer = tag.getUUID("TrustedPlayer");
+            this.trustTicks = Mth.clamp(tag.getInt("TrustTicks"), 0, TRUST_TICKS);
+        }
         this.entityData.set(CHARGED, this.chargeTicks > 0);
     }
 
@@ -296,6 +319,10 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
 
     @Override
     protected void registerGoals() {
+        // ⚠ 同じ優先度の目標は互いに割り込まない（`WrappedGoal.canBeReplacedBy` は優先度の数が大きい方だけを譲らせる）。
+        //   魚（0）は船・波切り・巡る目標に割り込む。船（1）と波切り（1）は、走っている方が終わるまで待つ
+        this.goalSelector.addGoal(0, new FishLureGoal(this));
+        this.goalSelector.addGoal(1, new FollowBoatGoal(this));
         this.goalSelector.addGoal(1, new ShearPassGoal(this));
         this.goalSelector.addGoal(2, new SeaWanderGoal(this));
         this.goalSelector.addGoal(5, new LookAtPlayerGoal(this, Player.class, 24.0f));
@@ -456,6 +483,15 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     protected void customServerAiStep() {
         super.customServerAiStep();
         this.stateTimer++;
+        if (this.followCooldown > 0) {
+            this.followCooldown--;
+        }
+        if (this.trustTicks > 0 && --this.trustTicks == 0) {
+            this.trustedPlayer = null;
+        }
+        if (this.calmTicks > 0) {
+            this.calmTicks--;
+        }
         int st = getState();
         switch (st) {
             case FLY, GLIDE -> tickFlight(st);
@@ -703,7 +739,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             return;
         }
         Player near = this.level().getNearestPlayer(this, 6.0);
-        if (this.stateTimer > this.paddleTime || (near != null && !near.isSpectator() && !near.isCreative())) {
+        boolean disturbed = near != null && !near.isSpectator() && !near.isCreative() && this.calmTicks <= 0;
+        if (this.stateTimer > this.paddleTime || disturbed) {
             beginTakeoff();
         }
     }
@@ -772,6 +809,42 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         return top;
     }
 
+    /** 魚を食べさせてくれた人を覚える（{@link FishLureGoal}）。{@link #TRUST_TICKS}（5 分）で忘れる */
+    void trust(Player player) {
+        this.trustedPlayer = player.getUUID();
+        this.trustTicks = TRUST_TICKS;
+        // ⚠ 船に付いている最中に魚へ呼ばれると、付くのをやめた時の待ち（2〜4 分）が残り、食べた後に付いてこなかった
+        //   （2026-10-07 に試した）。魚をくれた人の船へは、飛び立ったらすぐ付けるようにする
+        this.followCooldown = 0;
+    }
+
+    /** この人を信用しているか（魚を食べさせてもらってから 5 分以内で、その後に殴られていない） */
+    boolean trusts(Player player) {
+        return this.trustTicks > 0 && player.getUUID().equals(this.trustedPlayer);
+    }
+
+    /** 人が近くても、しばらく水面から飛び立たない（魚を食べているところを見せる） */
+    void calmFor(int ticks) {
+        this.calmTicks = ticks;
+    }
+
+    /** 浮いている残りを ticks にする（魚をくれた人の船へすぐ付いていけるように、食べたら少しだけ浮いて飛び立つ） */
+    void restBriefly(int ticks) {
+        this.paddleTime = this.stateTimer + ticks;
+    }
+
+    /** 水面の決まった点へ急降下する（{@link FishLureGoal}。休みの降下 {@link #beginDive} と同じ動き） */
+    void diveAt(double surface, float yaw) {
+        this.surfaceY = surface;
+        this.setYRot(yaw);
+        this.yBodyRot = yaw;
+        setState(DIVE);
+        this.getNavigation().stop();
+        if (this.moveControl instanceof ShearwaterMoveControl mc) {
+            mc.halt();
+        }
+    }
+
     /** 波を切る間、滑空を保たせる（{@link ShearPassGoal}）。 */
     void holdGlide(int ticks) {
         this.glideHold = ticks;
@@ -833,6 +906,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             int st = getState();
             if (st == PADDLE || st == SLEEP || st == DIVE) {
                 beginTakeoff();
+            }
+            // 信用していた人に殴られたら忘れる（船にも付いてこなくなる）
+            if (source.getEntity() instanceof Player p && trusts(p)) {
+                this.trustTicks = 0;
+                this.trustedPlayer = null;
             }
         }
         return ok;
