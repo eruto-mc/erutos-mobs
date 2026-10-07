@@ -25,20 +25,26 @@ import java.util.EnumSet;
  *   波を切る … 12〜20 秒ごとに 3〜4 秒、水面すれすれへ降りて船の横を蛇行する。蛇行で左右へ傾くので、
  *              下がった翼端が波を切り、しぶきと泡の線が船の横に残る（{@link ShearwaterEffects}）
  *   回る    … 船がほぼ止まっていたら、船のまわりを半径 12 で、傾いたまま回る（翼端がずっと波を切る。{@link ShearPassGoal} と同じ回り方）
- * ふつうは見つけるたび（1 秒ごと）に 1/8 で付く。魚を食べさせた人（{@link FishLureGoal}）の船には、64 ブロック先からでも
+ * ふつうは見つけるたび（1 秒ごと）に 1/8 で付く。魚を食べさせた人（{@link FishLureGoal}）の船には、96 ブロック先からでも
  * 必ず付き、長く（最長 2 分）、近く（9〜13）並ぶ。
  * 並ぶ間、その人に嵐渡り（{@link net.erutobusiness.erutosmobs.effect.StormCrossingEffect}）を分ける。
  * 信用している人の船に終わりまで並べたら、風切羽を 1 枚くれる（{@link ShearwaterEntity#giveFeather}）。
- * 終わったら 2〜4 分（信用している人なら 1〜2 分）は付いてこない。船が陸へ上がる・人が降りる・64 より離れる・
+ * 終わったら 2〜4 分（信用している人なら 1〜2 分）は付いてこない。船が陸へ上がる・人が降りる・64（信用している人なら 112）より離れる・
  * その人に殴られる、でもやめる。嵐の怒りを買っている人の船には付かない。
  * ⚠ 人が漕ぐ船は、動きを漕ぐ人の画面の側が決めてサーバへ位置を送る。サーバの船の速度は当てにならないので、
  *   位置の差から速さを出す。
  */
 class FollowBoatGoal extends Goal {
     private static final double SEARCH = 48.0;
-    /** 信用している人（魚をくれた人）の船は、もっと遠くから見つける */
-    private static final double TRUSTED_SEARCH = 64.0;
+    /**
+     * 信用している人（魚をくれた人）の船は、もっと遠くから見つける。
+     * ⚠ 64 だと、漕ぎながら魚を落とした船は、鳥が食べて浮き（3〜4 秒）飛び立つ（2 秒）間に 50 ブロック前後先へ行き、
+     *   超えたときは船が回って戻ってくるまで 40 秒付かなかった（2026-10-08 に試した）
+     */
+    private static final double TRUSTED_SEARCH = 96.0;
     private static final double GIVE_UP = 64.0;
+    /** 信用している人の船は、見つける距離より遠くなるまで追う（見つける距離と同じだと、遠くで見つけた途端にやめる） */
+    private static final double TRUSTED_GIVE_UP = 112.0;
     /** 横のずれを寄せるときに狙う、鳥の前の距離（波を切る間は蛇行を鋭くするため短く） */
     private static final double LOOK = 10.0;
     private static final double SKIM_LOOK = 6.0;
@@ -148,7 +154,7 @@ class FollowBoatGoal extends Goal {
             return false;
         }
         if (this.time >= this.duration || !flying(this.bird.getState())
-                || horizontalDistSqr(boat.position()) > GIVE_UP * GIVE_UP) {
+                || horizontalDistSqr(boat.position()) > (this.trusted ? TRUSTED_GIVE_UP * TRUSTED_GIVE_UP : GIVE_UP * GIVE_UP)) {
             return false;
         }
         // その人に殴られたらやめる
@@ -273,7 +279,8 @@ class FollowBoatGoal extends Goal {
         // 船の速さに合わせ、遅れていれば速く、出すぎていれば遅く飛ぶ
         double want = speed + Mth.clamp(errF * 0.03, -0.1, 0.2);
         double cruise = this.bird.getState() == ShearwaterEntity.GLIDE ? ShearwaterMoveControl.CRUISE_GLIDE : ShearwaterMoveControl.CRUISE_FLY;
-        double mod = Mth.clamp(want / cruise, 0.6, 2.2);
+        // ⚠ 上限 2.2 だと羽ばたき中は 0.48 ブロック/tick までで、嵐渡りで速くなった船（0.49）に遠くから追いつけない
+        double mod = Mth.clamp(want / cruise, 0.6, 2.8);
         this.bird.getMoveControl().setWantedPosition(aim.x, y, aim.z, mod);
     }
 }
