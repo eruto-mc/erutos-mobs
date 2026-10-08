@@ -96,6 +96,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final EntityDataAccessor<Integer> BANK =
             SynchedEntityData.defineId(ShearwaterEntity.class, EntityDataSerializers.INT);
     private float bankFilter;
+    /** 傾きを決めるために、前の tick に覚えた向き（飛ばない状態から戻ったときは NaN から始める） */
+    private float bankYaw = Float.NaN;
     /**
      * 帯電（雷を受けた・嵐で雷を呼んだ後の 1 分）。光る層が最大近くまで上がり、翼から火花が出る。
      * 残りの tick はサーバだけが持ち、クライアントへは入り切りだけを送る（毎 tick 送らない）。
@@ -137,6 +139,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     public float tilt;
     public float tiltO;
     private static final float MAX_TILT = 35.0f;
+    /**
+     * 傾きの角度を出すときの横の速さの下限（ブロック/tick）。遅いほど小さな上下で大きく傾くので、ここで抑える
+     * （羽ばたきの巡航 0.22 で 0.08 上るとき 20°、滑空 0.27 で最大の 0.15 下りるとき −29°）
+     */
+    private static final double MIN_TILT_SPEED = 0.25;
 
     private static final RawAnimation ANIM_FLY = RawAnimation.begin().thenLoop("animation.shearwater.swim");
     private static final RawAnimation ANIM_GLIDE = RawAnimation.begin().thenLoop("animation.shearwater.glide");
@@ -365,6 +372,14 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         if (getState() != state) {
             this.entityData.set(STATE, state);
             this.stateTimer = 0;
+            if (state != FLY && state != GLIDE) {
+                // 飛ぶ状態を離れたら傾きを忘れる（戻ったとき、離れていた間の向きの変化を曲がりと数えない）
+                this.bankYaw = Float.NaN;
+                this.bankFilter = 0.0f;
+                if (!this.level().isClientSide()) {
+                    this.entityData.set(BANK, 0);
+                }
+            }
             if (state != FLY && state != GLIDE && state != HOVER && state != LAND
                     && this.moveControl instanceof ShearwaterMoveControl mc) {
                 mc.halt();
@@ -387,22 +402,42 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         return s == STAND || s == WALK;
     }
 
+    /**
+     * 浜へ降りる最後（真上からほぼ垂直に降りている）か。画面の側で、位置の変化から決める（サーバは {@link #tickLanding} の後半）。
+     * このときは翼を広げて脚を下ろす姿（hover の動き）にする
+     */
+    public boolean landingFlare() {
+        if (getState() != LAND) {
+            return false;
+        }
+        double dx = this.getX() - this.xo;
+        double dz = this.getZ() - this.zo;
+        return dx * dx + dz * dz < 0.12 * 0.12 && this.getY() - this.yo < -0.05;
+    }
+
     @Override
     public void tick() {
         super.tick();
         if (this.level().isClientSide) {
-            // 上り下りの傾き。この tick の位置の変化から角度を出し、急に振れないよう 15% ずつ寄せる
+            // 上り下りの傾き。進んで飛ぶ間（羽ばたき・滑空・浜へ向かう間）だけ、この tick の位置の変化から角度を出し、
+            // 急に振れないよう 15% ずつ寄せる。ほかの状態（止まって羽ばたく・離陸・急降下・水面・浜）は動きの姿勢に任せ、
+            // 残っていた傾きは 4 tick ほど（動きの切り替えと同じ長さ）で消す
+            // ⚠⚠ 2026-10-08・ユーザー「鳥が縦に回転しているのを見かけた」。前は止まって羽ばたく間も傾きを足していて、横の速さの
+            //   下限が 0.08 だったので、止まりかけで少し上下するだけで最大の 35° まで振れ、動きの姿勢（胴を 30° 起こす）と合わせて
+            //   60° を超えて縦に立った。状態が変わった瞬間に傾きを足すのを止めていたので、最大 35° が 1 コマで戻ってもいた
             this.tiltO = this.tilt;
-            float target = 0.0f;
             int st = getState();
-            if (st == FLY || st == GLIDE || st == HOVER) {
-                double dx = this.getX() - this.xo;
-                double dz = this.getZ() - this.zo;
-                double dy = this.getY() - this.yo;
-                double h = Math.max(Math.sqrt(dx * dx + dz * dz), 0.08);
-                target = net.minecraft.util.Mth.clamp((float) Math.toDegrees(Math.atan2(dy, h)), -MAX_TILT, MAX_TILT);
+            double dx = this.getX() - this.xo;
+            double dz = this.getZ() - this.zo;
+            double dy = this.getY() - this.yo;
+            double hs = Math.sqrt(dx * dx + dz * dz);
+            if (st == FLY || st == GLIDE || (st == LAND && !landingFlare())) {
+                double h = Math.max(hs, MIN_TILT_SPEED);
+                float target = net.minecraft.util.Mth.clamp((float) Math.toDegrees(Math.atan2(dy, h)), -MAX_TILT, MAX_TILT);
+                this.tilt += (target - this.tilt) * 0.15f;
+            } else {
+                this.tilt *= 0.6f;
             }
-            this.tilt += (target - this.tilt) * 0.15f;
             if (this.cryGlowTicks > 0) {
                 this.cryGlowTicks--;
             }
@@ -583,10 +618,27 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             this.playSound(ModSounds.SHEARWATER_FLAP.get(), 0.9f, 0.75f + this.random.nextFloat() * 0.15f);
         }
         // 傾き（bank）: 向きの変化から左右を決め、滑空の左右 2 本を選ばせる
-        float dyaw = net.minecraft.util.Mth.wrapDegrees(this.getYRot() - this.yRotO);
+        // ⚠⚠ 向きの変化は、前の tick にここで覚えた向きと比べる。前は `getYRot() − yRotO` で、これはいつも 0 だった
+        //   （2026-10-08 に画面側へ傾きを書き出して気づいた。`Mob.serverAiStep` はこの関数 → 移動の制御（向きを変える）の順で、
+        //   `yRotO` は tick の頭の `baseTick` で写すので、ここではまだどちらも前の tick の向き）。傾いた姿の 2 本は、
+        //   9 月に入れてからゲームの中では一度も出ていなかった
+        // ⚠ 傾き始めは 1 tick に 1°（滑空の速さで半径 17 ブロックより急な曲がり）、戻すのは 0.3° を切ってから
+        //   （波切りの円・船を回る円・船の曲がりで傾き、船の横に並ぶ間の小さな揺れでは切り替わらない）
+        float yaw = this.getYRot();
+        float dyaw = Float.isNaN(this.bankYaw) ? 0.0f
+                : net.minecraft.util.Mth.clamp(net.minecraft.util.Mth.wrapDegrees(yaw - this.bankYaw), -8.0f, 8.0f);
+        this.bankYaw = yaw;
         this.bankFilter = this.bankFilter * 0.85f + dyaw * 0.15f;
-        int bank = this.bankFilter > 0.6f ? 1 : (this.bankFilter < -0.6f ? -1 : 0);
-        if (bank != this.entityData.get(BANK)) {
+        int was = this.entityData.get(BANK);
+        int bank = was;
+        if (this.bankFilter > 1.0f) {
+            bank = 1;
+        } else if (this.bankFilter < -1.0f) {
+            bank = -1;
+        } else if (Math.abs(this.bankFilter) < 0.3f) {
+            bank = 0;
+        }
+        if (bank != was) {
             this.entityData.set(BANK, bank);
         }
         if (this.shearCooldown > 0) {
@@ -1048,7 +1100,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         RawAnimation anim = switch (getState()) {
             case GLIDE -> bank < 0 ? ANIM_GLIDE_L : (bank > 0 ? ANIM_GLIDE_R : ANIM_GLIDE);
             case HOVER -> ANIM_HOVER;
-            case DIVE, LAND -> ANIM_DIVE;
+            case DIVE -> ANIM_DIVE;
+            // ⚠ 浜へ降りる間は前は急降下の姿（頭を 54° 下げる）のままで、降りる点へ向かう最長 6 秒、頭を下げたまま水平に
+            //   輪を描いて飛んでいた（2026-10-08 に動きのデータの値を数えて気づいた）。向かう間は羽ばたき、最後に真上から
+            //   降りるときは翼を広げて脚を下ろす（実物の鳥が降りる前に翼を立てて速さを殺すのと同じ）
+            case LAND -> landingFlare() ? ANIM_HOVER : ANIM_FLY;
             case PADDLE -> ANIM_PADDLE;
             case SLEEP -> ANIM_SLEEP;
             case TAKEOFF -> ANIM_TAKEOFF;

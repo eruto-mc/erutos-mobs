@@ -147,9 +147,13 @@ class FishLureGoal extends Goal {
         float yawToFish = (float) (Mth.atan2(dz, dx) * Mth.RAD_TO_DEG) - 90.0f;
         if (this.diving) {
             if (this.bird.getState() == ShearwaterEntity.DIVE) {
-                // 降りる間も魚の方へ向き直る（降下は向いた方へ進む）
-                this.bird.setYRot(yawToFish);
-                this.bird.yBodyRot = yawToFish;
+                // 降りる間も魚の方へ向き直る（降下は向いた方へ進む）。⚠ 1 tick に 8° まで、魚の真上近く（1 ブロック以内）では向き直らない。
+                //   前は毎 tick そのまま向けていて、魚の真上を越えると向きが一気に半回転しえた（頭を下げた姿のままくるりと回る）
+                if (h > 1.0) {
+                    float yaw = Mth.approachDegrees(this.bird.getYRot(), yawToFish, 8.0f);
+                    this.bird.setYRot(yaw);
+                    this.bird.yBodyRot = yaw;
+                }
                 return;
             }
             // 水に入った（浮いた）: 近くに魚があれば食べる

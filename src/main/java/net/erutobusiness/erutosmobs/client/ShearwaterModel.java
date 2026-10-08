@@ -70,20 +70,22 @@ public class ShearwaterModel extends GeoModel<ShearwaterEntity> {
     public void setCustomAnimations(ShearwaterEntity animatable, long instanceId, AnimationState<ShearwaterEntity> animationState) {
         super.setCustomAnimations(animatable, instanceId, animationState);
         int st = animatable.getState();
-        if (animatable.isDeadOrDying() || st == ShearwaterEntity.SLEEP || st == ShearwaterEntity.DIVE) {
+        if (animatable.isDeadOrDying()) {
             return;
         }
         EntityModelData data = animationState.getData(DataTickets.ENTITY_MODEL_DATA);
-        if (data != null) {
+        if (data != null && st != ShearwaterEntity.SLEEP && st != ShearwaterEntity.DIVE) {
             float yaw = Mth.clamp(data.netHeadYaw(), -MAX_YAW, MAX_YAW) * Mth.DEG_TO_RAD;
             float pitch = Mth.clamp(data.headPitch(), -MAX_PITCH, MAX_PITCH) * Mth.DEG_TO_RAD;
             add("neck2", 0.0f, yaw / 3.0f);
             add("neck3", pitch * 0.5f, yaw / 3.0f);
             add("neck4", pitch * 0.5f, yaw / 3.0f);
         }
-        if (st == ShearwaterEntity.FLY || st == ShearwaterEntity.GLIDE || st == ShearwaterEntity.HOVER) {
-            // 正で上り（鼻先が上）。ShearwaterEntity#tick が位置の変化から決めて、なめらかにしている
-            float tilt = Mth.lerp(animationState.getPartialTick(), animatable.tiltO, animatable.tilt);
+        // 上り下りの傾き（正で上り＝鼻先が上）。ShearwaterEntity#tick が、進んで飛ぶ間だけ位置の変化から決め、ほかの状態では
+        // 4 tick ほどで 0 へ戻す。⚠ どの状態でも足す——前は飛ぶ状態のときだけ足していて、急降下・離陸・水面へ移った瞬間に
+        // 最大 35° が 1 コマで戻っていた
+        float tilt = Mth.lerp(animationState.getPartialTick(), animatable.tiltO, animatable.tilt);
+        if (tilt != 0.0f) {
             add("body", tilt * Mth.DEG_TO_RAD, 0.0f);
         }
     }
