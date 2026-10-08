@@ -16,7 +16,7 @@
 | 生き物の中身（状態・AI・湧き） | `src/main/java/net/erutobusiness/erutosmobs/entity/ShearwaterEntity.java` | この MOD |
 | 飛び方 | `entity/ShearwaterMoveControl.java`（向き・速さ・上下を自分で持つ）・`entity/ShearPassGoal.java`（波を切る） | この MOD |
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
-| 光る層・粒子 | `client/ShearwaterGlowLayer.java`・`client/{Feather,Mist,Spray,Foam,Spark,Bolt,Mote}Particle.java`・`entity/ShearwaterEffects.java` | この MOD。光る部分の絵（`textures/entity/shearwater_glow.png`）と、羽根・しぶき・泡・火花・稲妻の帯・光の粒の絵（`textures/particle/`）は mc-model-kit が塗る。風の筋だけバニラの煙の絵を使う。粒子の大きさは「実物 × 11」（翼幅 12 ブロックは実物 1.1 m の約 11 倍。1 ブロック ＝ 1 m）で決める |
+| 光る層・粒子 | `client/ShearwaterGlowLayer.java`・`client/{Feather,Mist,Spray,Foam,Spark,Bolt}Particle.java`・`entity/ShearwaterEffects.java` | この MOD。光る部分の絵（`textures/entity/shearwater_glow.png`）と、羽根・しぶき・泡・火花・稲妻の帯の絵（`textures/particle/`）は mc-model-kit が塗る。風の筋だけバニラの煙の絵を使う。粒子の大きさは「実物 × 11」（翼幅 12 ブロックは実物 1.1 m の約 11 倍。1 ブロック ＝ 1 m）で決める |
 | 粒子の出どころ | `entity/ShearwaterLocators.java`（翼の骨と、その骨から見た翼端・後縁・前縁の点。足の位置） | mc-model-kit が模型から計算して書く。手で直さない。`ShearwaterRenderer` が描くたびに骨の行列へ点を掛けて、羽ばたいている間も翼の上から出す |
 | 伝説のしるし（道具・効果・薬・進捗） | `item/`・`effect/`・`brewing/PotionMix.java`・`registry/Mod{Effects,Potions}.java`・`advancement/`・`client/BoatBoost.java`・`ModEvents.java`・`data/erutosmobs/advancements/shearwater/` | この MOD。風切羽の道具の絵は風切羽の粒子と同じ物、効果の絵（`textures/mob_effect/`）は mc-model-kit が塗る |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
@@ -42,7 +42,6 @@
 | 何 | いつ | どう見える |
 | - | - | - |
 | 光る層 | いつも | 琥珀色の縁・目・顔の泡の線が暗さに応じて光る（昼 0.35 → 夜 0.8）。雷雨でさらに強まり、ときどき瞬く |
-| 光の粒 | 飛んでいる間（昼も夜も） | 翼端と後縁の先から、琥珀色の光の粒（幅 0.28〜0.4）が 1 秒に 3 つほどこぼれる。その場に残るので鳥の後ろへ光の帯が引かれ、ゆっくり沈みながら瞬いて 1.5〜2.5 秒で消える |
 | 鳴いた光 | 鳴くたび | 鳴きの 1.2 秒の間、光が一度強まる |
 | 帯電 | 雷を受けたとき・嵐で雷を呼んだとき（1 分） | 雷で傷まず燃えず、体力が 10 戻る。光が最大近くになり、翼に稲妻が走る: 後縁の短い稲妻（毎 tick 1〜2 本）・翼端から翼の外の空へ 1.5〜2.5 ブロック走る放電（枝つき）・前縁を肩から翼端まで走る長い稲妻。どれも白い芯・水色の縁の帯（幅 0.2〜0.26）をつないだ折れ線で、折れ目に光の点が付く。2〜4 tick で消えて別の所に出る |
 | 嵐の雷呼び | 雷雨の中を飛んでいる間、平均 90 秒に 1 回 | 見た目だけの雷（火も傷も無い）を自分へ落とし、帯電する |
@@ -92,7 +91,7 @@
 
 | 鍵 | 既定 | 意味 |
 | - | - | - |
-| `particleAmount` | 1.0 | 粒子（しぶき・泡・風の筋・火花・滴・光の粒）を出す割合。0〜1。ゲームの「パーティクル」の設定（すべて 1・少なめ 0.5・最小 0.25）をさらに掛ける。翼の稲妻は 1 本ずつ出す／出さないを決める（途中で欠けさせない） |
+| `particleAmount` | 1.0 | 粒子（しぶき・泡・風の筋・火花・滴）を出す割合。0〜1。ゲームの「パーティクル」の設定（すべて 1・少なめ 0.5・最小 0.25）をさらに掛ける。翼の稲妻は 1 本ずつ出す／出さないを決める（途中で欠けさせない） |
 
 ## 建て方
 
