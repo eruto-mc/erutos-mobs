@@ -12,7 +12,7 @@
 
 | 何 | どこ | 誰が作るか |
 | - | - | - |
-| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | 手元の模型作りの道具 mc-model-kit（未公開）。その `ship_to_mod.py` が写す。ここでは手で触らない。翼は羽 1 枚ずつで組む（前縁の腕・雨覆 2 段・次列風切 7 枚・初列風切 9 枚。初列は外ほど長く開いて翼端を尖らせる）。羽の板はすべて水平で、どの動きでも板どうしが交わらないことを書き出しのときに確かめる |
+| 模型・絵・13 の動き | `src/main/resources/assets/erutosmobs/{geo,animations,textures}` | 手元の模型作りの道具 mc-model-kit（未公開）。その `ship_to_mod.py` が写す。ここでは手で触らない。翼は羽 1 枚ずつで組む（前縁の腕・雨覆 2 段・次列風切 7 枚・初列風切 9 枚。初列は外ほど長く開いて翼端を尖らせる）。羽の板はすべて水平で、どの動きでも板どうしが交わらないことを書き出しのときに確かめる。水面で浮く・眠る・浜に立つ・歩く姿では、翼を背の上にたたむ（左を上へ重ね、翼の先を半分に縮めて初列風切をそろえ、尾の付け根の板を隠して尾を閉じる） |
 | 生き物の中身（状態・AI・湧き） | `src/main/java/net/erutobusiness/erutosmobs/entity/ShearwaterEntity.java` | この MOD |
 | 飛び方 | `entity/ShearwaterMoveControl.java`（向き・速さ・上下を自分で持つ）・`entity/ShearPassGoal.java`（波を切る） | この MOD |
 | 描画（GeckoLib） | `client/ShearwaterModel.java`・`client/ShearwaterRenderer.java`（0.6 倍。翼幅 約 12 ブロック） | この MOD |
