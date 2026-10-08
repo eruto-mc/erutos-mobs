@@ -160,6 +160,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final RawAnimation ANIM_CRY = RawAnimation.begin().thenPlay("animation.shearwater.cry");
     private static final RawAnimation ANIM_HURT = RawAnimation.begin().thenPlay("animation.shearwater.hurt");
     private static final RawAnimation ANIM_FAINT = RawAnimation.begin().thenPlayAndHold("animation.shearwater.faint");
+    private static final RawAnimation ANIM_DISPLAY = RawAnimation.begin().thenPlay("animation.shearwater.display");
 
     /** 動きの長さ（tick）。キットの秒 × 20。 */
     private static final int DIVE_TICKS = 24;
@@ -169,6 +170,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private static final int FLAP_TICKS = 17;
     private static final int CLIMB_FLAP_TICKS = 15;
     private static final int FAINT_TICKS = 40;
+    /** 翼を広げて見せる動き（キットの `make_display`・3.2 秒） */
+    private static final int DISPLAY_TICKS = 64;
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -177,6 +180,10 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
     private int restCooldown = 1800;
     private int paddleTime = 400;
     private int cryCooldown = 400;
+    /** 翼を広げて見せる動きの残り（tick）と、次までの間（tick）。人が近くに来たかの前の値 */
+    private int displayTicks;
+    private int displayCooldown = 600;
+    private boolean watcherNear;
     private double surfaceY = Double.NaN;
     @Nullable
     private BlockPos shoreTarget;
@@ -280,6 +287,7 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         tag.putInt("ChargeTicks", this.chargeTicks);
         tag.putInt("ShearCooldown", this.shearCooldown);
         tag.putInt("FollowCooldown", this.followCooldown);
+        tag.putInt("DisplayCooldown", this.displayCooldown);
         if (this.trustedPlayer != null && this.trustTicks > 0) {
             tag.putUUID("TrustedPlayer", this.trustedPlayer);
             tag.putInt("TrustTicks", this.trustTicks);
@@ -309,6 +317,9 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         this.chargeTicks = Mth.clamp(tag.getInt("ChargeTicks"), 0, CHARGE_TICKS);
         if (tag.contains("ShearCooldown")) {
             this.shearCooldown = Math.max(0, tag.getInt("ShearCooldown"));
+        }
+        if (tag.contains("DisplayCooldown")) {
+            this.displayCooldown = Math.max(0, tag.getInt("DisplayCooldown"));
         }
         if (tag.contains("FollowCooldown")) {
             this.followCooldown = Math.max(0, tag.getInt("FollowCooldown"));
@@ -487,6 +498,47 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         }
     }
 
+    /**
+     * 翼を広げて見せる（水に浮く間と陸で座る間）。30〜75 秒おきと、人が 20 ブロック以内へ来たとき（1〜3 秒後）に、
+     * 胸を起こして翼を開き、高く掲げて 2 回打ってからたたむ（キットの `make_display`）。翼を掲げきった所で鳴いて光る。
+     * ⚠ 2026-10-08・ユーザー「飛んでるときは伝説感あるけど、泳いでるときとか羽を閉じてるときはやっぱ伝説感がない」。
+     *   休む姿をいくら整えても翼の大きさは見えないので、休む間にも翼幅 12 ブロックを見せる場面を作る。
+     * ⚠ 休む状態を離れたら（飛び立つ・眠る）動きを止める。止めないと、飛び立つ間も最後まで広げる動きが続く。
+     * ⚠ 観戦の人は近くの人に数えない（`Level.getNearestPlayer` は観戦を除く）
+     */
+    private void tickDisplay(int st) {
+        if (st != PADDLE && st != STAND) {
+            if (this.displayTicks > 0) {
+                stopTriggeredAnimation("main", "display");
+                this.displayTicks = 0;
+            }
+            this.watcherNear = false;
+            return;
+        }
+        if (this.displayTicks > 0) {
+            int s = DISPLAY_TICKS - this.displayTicks--;
+            if (s == 8 || s == 30 || s == 50) {                    // 開くとき・2 回の打ち下ろし（キットの区切り 0.4・1.5・2.5 秒）
+                this.playSound(ModSounds.SHEARWATER_FLAP.get(), s == 8 ? 0.8f : 1.3f, 0.75f + this.random.nextFloat() * 0.1f);
+            }
+            if (s == 18) {                                         // 翼を掲げきった所で鳴いて光る（鳴きの動きは使わない）
+                this.playSound(ModSounds.SHEARWATER_CRY.get(), 2.0f, 0.95f + this.random.nextFloat() * 0.1f);
+                this.level().broadcastEntityEvent(this, EVENT_CRY);
+                this.cryCooldown = Math.max(this.cryCooldown, 400);
+            }
+            return;
+        }
+        boolean near = this.level().getNearestPlayer(this, 20.0) != null;
+        if (near && !this.watcherNear && this.displayCooldown > 60) {
+            this.displayCooldown = 20 + this.random.nextInt(40);
+        }
+        this.watcherNear = near;
+        if (--this.displayCooldown <= 0) {
+            triggerAnim("main", "display");
+            this.displayTicks = DISPLAY_TICKS;
+            this.displayCooldown = 600 + this.random.nextInt(900);
+        }
+    }
+
     /** 鳴く（動き・声・光の合図を一度に）。サーバで呼ぶ */
     private void cry() {
         triggerAnim("main", "cry");
@@ -553,9 +605,11 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
             case STAND, WALK -> tickOnShore(st);
             default -> setState(FLY);
         }
+        tickDisplay(getState());
         // ⚠ 実物「ほとんど海上で鳴くことはないが、夜間の営巣地では鳴き声や翼の音で騒がしくなる」
         //   （ja.wikipedia）。飛んでいる間は 4 回に 1 回だけ、浮いている・立っている・夜・雷雨は毎回鳴く。
-        if (--this.cryCooldown <= 0 && st != SLEEP && st != DIVE && st != TAKEOFF && st != LAND) {
+        // ⚠ 翼を広げて見せる間は鳴かない（鳴きの動きが同じ再生の枠「main」を取り、広げる動きを途中で切る）
+        if (--this.cryCooldown <= 0 && st != SLEEP && st != DIVE && st != TAKEOFF && st != LAND && this.displayTicks == 0) {
             this.cryCooldown = 800 + this.random.nextInt(1600);
             boolean loud = isNightTime() || this.level().isThundering();
             boolean quietAtSea = isFlying() && !loud && this.random.nextInt(4) != 0;
@@ -1092,7 +1146,8 @@ public class ShearwaterEntity extends PathfinderMob implements GeoEntity {
         controllers.add(new AnimationController<>(this, "main", 4, this::mainAnimation)
                 .triggerableAnim("cry", ANIM_CRY)
                 .triggerableAnim("hurt", ANIM_HURT)
-                .triggerableAnim("faint", ANIM_FAINT));
+                .triggerableAnim("faint", ANIM_FAINT)
+                .triggerableAnim("display", ANIM_DISPLAY));
     }
 
     private PlayState mainAnimation(AnimationState<ShearwaterEntity> state) {

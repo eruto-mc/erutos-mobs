@@ -12,8 +12,8 @@ public final class ShearwaterLocators {
     public static final double[] BANK_L_TIP_R = {-4.400, 5.215, 0.056};
     public static final double[] BANK_R_TIP_L = {5.017, 4.328, 0.724};
     public static final double[] BANK_R_TIP_R = {-5.700, -0.352, -1.128};
-    public static final double[] FOOT_L = {0.202, 0.052, 0.480};
-    public static final double[] FOOT_R = {-0.203, 0.052, 0.480};
+    public static final double[] FOOT_L = {0.202, 0.056, 0.493};
+    public static final double[] FOOT_R = {-0.203, 0.056, 0.493};
     public static final double[] BODY_CENTER = {0.012, 0.975, -0.300};
     public static final double[] BODY_BOTTOM_Y = {0.667, 0.000, 0.000};
 
