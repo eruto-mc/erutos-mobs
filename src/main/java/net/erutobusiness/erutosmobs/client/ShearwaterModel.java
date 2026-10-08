@@ -64,7 +64,13 @@ public class ShearwaterModel extends GeoModel<ShearwaterEntity> {
      *   そのまま入れる。つまり GeckoLib の中では rotX が正で上を向く。
      * 首の 4 節（neck〜neck4）は休めの回転が 0 なので、同じ足し方で向きが合う。
      * ⚠ 頭（head）は休めで [75, 0, 180] 回っているので触らない（そこへ足すと軸が曲がる）。
-     * ⚠ GeckoLib は毎コマ、全部の骨を動き（か初期値）で上書きしてからここを呼ぶので、足しても積み上がらない。
+     * ⚠⚠ 足した後に骨の「このコマで動かした」の印を消す（{@link #add}）。消さないと足し算が毎コマ積み上がる
+     *   （2026-10-08・ユーザー「新しい晴れた昼、なんか仰向けだけどどうした？」。描くたびの骨の値を書き出すと、羽ばたく間の
+     *   胴の上下の回転が 1880° → 2358° → 7264° と 1 コマに傾きの分ずつ増え、胴が 1 秒に約 3 回、前後にぐるぐる回って描かれていた）。
+     *   GeckoLib 4.8.4 の原文: `GeoBone.setRotX` は印を付ける（`markRotationAsChanged`）。`AnimationProcessor.tickAnimation` は、
+     *   今の動きに回転のキーが無い骨を、印が無いときだけ元の値へ戻し（`if (!bone.hasRotationChanged())`）、最後に印を消してから
+     *   ここが呼ばれる。ここで付けた印は次のコマまで残るので、キーの無い骨（羽ばたき swim と鳴き cry の胴、被弾 hurt の首）は
+     *   戻されず、そこへまた足していた。前は「毎コマ上書きされるので積み上がらない」と思い込んでいた。
      */
     @Override
     public void setCustomAnimations(ShearwaterEntity animatable, long instanceId, AnimationState<ShearwaterEntity> animationState) {
@@ -101,5 +107,7 @@ public class ShearwaterModel extends GeoModel<ShearwaterEntity> {
         if (rotY != 0.0f) {
             bone.setRotY(bone.getRotY() + rotY);
         }
+        // 足した分は今のコマだけのもの。印を消して、次のコマで GeckoLib が動き（か元の値）から組み直せるようにする
+        bone.resetStateChanges();
     }
 }
