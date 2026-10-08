@@ -25,6 +25,7 @@ public final class ClientEvents {
         event.registerSpriteSet(ModParticles.FOAM.get(), FoamParticle.Provider::new);
         event.registerSpriteSet(ModParticles.BOLT.get(), BoltParticle.Provider::new);
         event.registerSpriteSet(ModParticles.SPARK.get(), SparkParticle.Provider::new);
+        event.registerSpriteSet(ModParticles.MOTE.get(), MoteParticle.Provider::new);
     }
 
     private ClientEvents() {

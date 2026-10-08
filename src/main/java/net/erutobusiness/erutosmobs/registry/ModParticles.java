@@ -54,6 +54,9 @@ public final class ModParticles {
      */
     public static final RegistryObject<SimpleParticleType> BOLT =
             PARTICLES.register("shearwater_bolt", () -> new SimpleParticleType(true));
+    /** 光の粒（幅 0.28〜0.4。昼も夜も明るい）。飛ぶ間、翼端と後縁の先からこぼれる。絵はキットが描く琥珀の光 `shearwater_mote_{0,1}` */
+    public static final RegistryObject<SimpleParticleType> MOTE =
+            PARTICLES.register("shearwater_mote", () -> new SimpleParticleType(true));
 
     private ModParticles() {
     }

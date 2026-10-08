@@ -36,6 +36,8 @@ import java.util.List;
  *   嵐の火花   … 帯電中は、後縁の稲妻（1 tick に 1〜2 本）・翼端から翼の外の空へ 1.5〜2.5 ブロック走る放電（3 tick に 1 本）・
  *                前縁を肩から翼端まで走る長い稲妻（10 tick に 1 本）。雷雨だけなら後縁の稲妻をときどき。
  *                どれも白い芯の帯を折れ線につなぎ、折れ目に光の点を置く（2〜4 tick で消え、次の tick に別の所へ出る）
+ *   光の粒     … 飛ぶ間は昼も夜も、翼端か後縁の外側半分から琥珀の光を 1 秒に 3 つほど。その場に置くので、鳥の後ろへ
+ *                光の帯が引かれる（2026-10-08・ユーザー「スクショに伝説感が無い」。晴れた昼に出る印が何も無かった）
  *   足の水しぶき … 水面からの離陸で、足が水を蹴る拍に（実物 20 cm × 11 → 幅 2 ブロックほど）
  *   水滴       … 水から飛び立った後の 5 秒、翼の後縁から落ちる。雨の中を飛ぶ間も、少なめに落ちる
  * 粒子の量は各自の設定 `particleAmount` とゲームの「パーティクル」の設定で間引く（{@link ParticleBudget}）。
@@ -46,6 +48,8 @@ import java.util.List;
  *   近くを飛び過ぎる風切り（{@link ShearwaterSounds#flyby}。この画面の人を見て決める）
  */
 final class ShearwaterEffects {
+    /** 光の粒を出す見込み（1 tick あたり。0.15 ＝ 1 秒に 3 つ。タイヨウチョウの羽根は 1 秒に 20） */
+    private static final float MOTE_PER_TICK = 0.15f;
     private final ShearwaterEntity bird;
     private int lastState = -1;
     private int stateTicks;
@@ -102,6 +106,16 @@ final class ShearwaterEffects {
         } else {
             this.lastTipL = null;
             this.lastTipR = null;
+        }
+
+        // 光の粒: 翼端（5 回に 3 回）か後縁の外側半分から。速さはほぼ 0 で置いていき、ゆっくり沈ませる
+        if ((st == ShearwaterEntity.FLY || st == ShearwaterEntity.GLIDE || st == ShearwaterEntity.HOVER
+                || st == ShearwaterEntity.DIVE || st == ShearwaterEntity.LAND) && r.nextFloat() < MOTE_PER_TICK) {
+            int side = r.nextInt(2);
+            int n = ShearwaterLocators.EDGE_PER_SIDE;
+            double[] p = r.nextInt(5) < 3 ? tip(side, bank, yaw) : edge(side, n / 2 + r.nextInt(n - n / 2), yaw);
+            add(level, ModParticles.MOTE.get(), p[0] + (r.nextDouble() - 0.5) * 0.4, p[1] - 0.1,
+                    p[2] + (r.nextDouble() - 0.5) * 0.4, (r.nextDouble() - 0.5) * 0.02, -0.01, (r.nextDouble() - 0.5) * 0.02);
         }
 
         // 嵐の火花（間引くときは稲妻 1 本ずつ。帯を途中で欠けさせない）
