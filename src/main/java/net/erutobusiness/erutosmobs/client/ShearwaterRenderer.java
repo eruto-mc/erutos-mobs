@@ -55,10 +55,10 @@ public class ShearwaterRenderer extends GeoEntityRenderer<ShearwaterEntity> {
     /**
      * ⚠⚠ 描いた翼の点を実体へ渡す（2026-09-28・ユーザー「帯電の火花も見えない」）。
      * ⚠ 前は滑空の姿勢で計算した決まった点から火花・水滴を出していたので、羽ばたいている間は翼から離れた空中に出た。
-     *   GeckoLib は骨の行列を写す印（`setTrackingMatrices`）の付いた骨だけ、描くときに回転の中心の行列を残す
+     *   GeckoLib は骨の行列をコピーする印（`setTrackingMatrices`）の付いた骨だけ、描くときに回転の中心の行列を残す
      *   （4.8.4 `GeoEntityRenderer.renderRecursively`）。そこへキットが計算した点（中心から見た位置）を掛ける。
-     * ⚠ 模型は同じ種類の鳥で 1 つを使い回すので、骨の行列は次の鳥を描くと上書きされる。描いた直後にここで写す。
-     * ⚠⚠ 本描きの直後（光る層より前）に写す。最初は描き終わり（`postRender`）で写していて、稲妻が翼の外・上へ大きくずれた。
+     * ⚠ 模型は同じ種類の鳥で 1 つを使い回すので、骨の行列は次の鳥を描くと上書きされる。描いた直後にここでコピーする。
+     * ⚠⚠ 本描きの直後（光る層より前）にコピーする。最初は描き終わり（`postRender`）でコピーしていて、稲妻が翼の外・上へ大きくずれた。
      *   光る層の描き直し（`reRender`）が `preRender` で基準の行列を「0.6 倍に縮めた後」で取り直し、骨の行列を
      *   縮める前の大きさで上書きしていた（4.8.4 `GeoEntityRenderer.preRender` は描き直しでも基準を取り直す）。
      *   ずれにはもう 1 つ、GeckoLib の行列の誤りが重なっていた（{@link #unpolluted}）。
@@ -95,7 +95,7 @@ public class ShearwaterRenderer extends GeoEntityRenderer<ShearwaterEntity> {
      * ⚠ `RenderUtils.translateMatrix` は平行移動を足すつもりで `matrix.add(new Matrix4f().m30(x).m31(y).m32(z))` としていて、
      *   `new Matrix4f()` が単位行列なので、回転の部分に単位行列が 1 つ乗る（右下の m33 も 2 になる）。GeckoLib 自身は
      *   骨の中心（点 0）しか使わないので表に出ないが、中心から離れた点を掛けると、その点の分（翼端なら 3.75）が
-     *   向きに関係なくずれる。写した値で確かめた: 対角 0.739・1.577・0.727 から 1 を引くと、キットの計算の −0.226・0.587・−0.233 に近い。
+     *   向きに関係なくずれる。コピーした値で確かめた: 対角 0.739・1.577・0.727 から 1 を引くと、キットの計算の −0.226・0.587・−0.233 に近い。
      * m33 が 2 ならこの誤りとみて引き戻し、1 ならそのまま（直った版）。どちらでもなければ false（使わない）。
      */
     private static boolean unpolluted(Matrix4f m) {
@@ -106,7 +106,7 @@ public class ShearwaterRenderer extends GeoEntityRenderer<ShearwaterEntity> {
         return Math.abs(m.m33() - 1.0f) < 1.0e-3f;
     }
 
-    /** 点を取る骨を引き、行列を写す印を付ける。骨が 1 本でも無ければ null（粒子は決まった点を使う） */
+    /** 点を取る骨を引き、行列をコピーする印を付ける。骨が 1 本でも無ければ null（粒子は決まった点を使う） */
     private GeoBone[] tracked(BakedGeoModel model) {
         if (model != this.trackedModel) {
             String[] names = ShearwaterLocators.LIVE_BONES;

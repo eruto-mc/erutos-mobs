@@ -20,7 +20,7 @@
 | 粒子の出どころ | `entity/ShearwaterLocators.java`（翼の骨と、その骨から見た翼端・後縁・前縁の点。足の位置） | mc-model-kit が模型から計算して書く。手で直さない。`ShearwaterRenderer` が描くたびに骨の行列へ点を掛けて、羽ばたいている間も翼の上から出す |
 | 伝説のしるし（道具・効果・薬・進捗） | `item/`・`effect/`・`brewing/PotionMix.java`・`registry/Mod{Effects,Potions}.java`・`advancement/`・`client/BoatBoost.java`・`ModEvents.java`・`data/erutosmobs/advancements/shearwater/` | この MOD。風切羽の道具の絵は風切羽の粒子と同じ物、効果の絵（`textures/mob_effect/`）は mc-model-kit が塗る |
 | 湧き | `data/erutosmobs/forge/biome_modifier/shearwater_spawns.json`（海・重み 1・1 体）＋ `checkShearwaterSpawn`（水面・空が見える・25 回に 1 回・192 ブロック以内に同族なし） | この MOD |
-| 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声。飛び過ぎる風切り・波を切る水・帯電のパチパチ） | 手元の音のツール wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` が写す |
+| 音 | `assets/erutosmobs/sounds/`（声 2・被弾・死・羽音。加算合成の笛としゃがれ声。飛び過ぎる風切り・波を切る水・帯電のパチパチ） | 手元の音のツール wavs（未公開）の `projects/2026-09_erutos-mobs-sfx/make.py --ship` がコピーする |
 
 ## 状態と動き
 
@@ -106,6 +106,6 @@ gradlew build
 ## 参考にしたもの
 
 - 作りの手本: Alex's Mobs（LGPL）。1 体が何で出来ているか（entity・model・render・音・湧き・loot）を jar で数えて、同じ部品をそろえた。
-  飛び方（行き先へ向けて速度に足し込み、向きは速度に合わせる）と光る層（目の描き方で重ねる）は、タイヨウチョウの作りを jar で読んで倣った。コードと絵は写していない。
-- 冠の組み方（羽 1 枚を、横向きの広い板と縁に立てた細い壁で作り、前からも横からも見えるようにする）: Cobblemon のフリーザーの模型を読んで倣った。形と絵は写していない。
+  飛び方（行き先へ向けて速度に足し込み、向きは速度に合わせる）と光る層（目の描き方で重ねる）は、タイヨウチョウの作りを jar で読んで倣った。コードと絵はコピーしていない。
+- 冠の組み方（羽 1 枚を、横向きの広い板と縁に立てた細い壁で作り、前からも横からも見えるようにする）: Cobblemon のフリーザーの模型を読んで倣った。形と絵はコピーしていない。
 - 生き物の暮らしと姿: ja.wikipedia「オオミズナギドリ」「ミズナギドリ科」（名の由来）「ミズナギドリ目」（目の上の塩を出す腺）／en.wikipedia「Shearwater」「Streaked shearwater」／Australian Bird Study Association「Streaked Shearwater」の計測表（翼と尾の長さ）。

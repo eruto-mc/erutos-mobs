@@ -7,7 +7,7 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
-/** 音の口。ogg は `assets/erutosmobs/sounds/` に置く（手元の音の道具 wavs の `make.py --ship` が作って写す）。 */
+/** 音の口。ogg は `assets/erutosmobs/sounds/` に置く（手元の音のツール wavs の `make.py --ship` が作ってコピーする）。 */
 public final class ModSounds {
     public static final DeferredRegister<SoundEvent> SOUNDS =
             DeferredRegister.create(ForgeRegistries.SOUND_EVENTS, ErutosMobs.MOD_ID);

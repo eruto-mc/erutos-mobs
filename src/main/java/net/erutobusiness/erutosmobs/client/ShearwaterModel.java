@@ -12,7 +12,7 @@ import software.bernie.geckolib.model.GeoModel;
 import software.bernie.geckolib.model.data.EntityModelData;
 
 /**
- * 模型・絵・動きの在り処。中身は mc-model-kit の書き出し（`ship_to_mod.py` が写す）。
+ * 模型・絵・動きの在り処。中身は mc-model-kit の書き出し（`ship_to_mod.py` がコピーする）。
  *
  * 動きの上に、その場の状況で決まる 2 つを足す（{@link #setCustomAnimations}）。どちらも参考にした 2 体が持っている:
  *   ルギア（Cobblemon 1.8.1 の poser）  … `q.look('neck'…'neck4', 'head_ai')` と `q.pitch_tilt('body')`

@@ -31,7 +31,7 @@ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 /**
  * Eruto's Mobs — 嵐の側の生き物たち。第一号はミズナギドリ。
  *
- * 模型と動きは mc-model-kit が作り、GeckoLib の JSON として resources に写す
+ * 模型と動きは mc-model-kit が作り、GeckoLib の JSON として resources にコピーする
  * （`assets/erutosmobs/geo`・`animations`・`textures/entity`）。ここに手で描いた模型は無い。
  */
 @Mod(ErutosMobs.MOD_ID)
