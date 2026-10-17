@@ -6,16 +6,16 @@ package net.erutobusiness.erutosmobs.entity;
  * yaw θ の世界へは {@link #toWorld} を使う。
  */
 public final class ShearwaterLocators {
-    public static final double[] GLIDE_TIP_L = {5.883, 2.310, 0.151};
-    public static final double[] GLIDE_TIP_R = {-5.801, 2.598, -0.462};
-    public static final double[] BANK_L_TIP_L = {5.895, 0.102, -0.546};
-    public static final double[] BANK_L_TIP_R = {-4.400, 5.215, 0.056};
-    public static final double[] BANK_R_TIP_L = {5.017, 4.328, 0.724};
-    public static final double[] BANK_R_TIP_R = {-5.700, -0.352, -1.128};
+    public static final double[] GLIDE_TIP_L = {5.944, 2.309, -0.719};
+    public static final double[] GLIDE_TIP_R = {-5.771, 2.598, -1.334};
+    public static final double[] BANK_L_TIP_L = {5.849, 0.076, -1.417};
+    public static final double[] BANK_L_TIP_R = {-4.475, 5.203, -0.813};
+    public static final double[] BANK_R_TIP_L = {5.175, 4.346, -0.134};
+    public static final double[] BANK_R_TIP_R = {-5.572, -0.346, -1.991};
     public static final double[] FOOT_L = {0.202, 0.056, 0.493};
     public static final double[] FOOT_R = {-0.203, 0.056, 0.493};
-    public static final double[] BODY_CENTER = {0.012, 0.975, -0.300};
-    public static final double[] BODY_BOTTOM_Y = {0.667, 0.000, 0.000};
+    public static final double[] BODY_CENTER = {0.011, 1.012, -0.268};
+    public static final double[] BODY_BOTTOM_Y = {0.630, 0.000, 0.000};
 
     /**
      * 描いた骨から取る点。`ShearwaterRenderer` が、描いたときの骨の行列（GeckoLib の `getLocalSpaceMatrix`）に
@@ -25,8 +25,8 @@ public final class ShearwaterLocators {
      */
     public static final String[] LIVE_BONES = {"prim8_l", "prim8_r", "wing_l", "wing_l", "wing_l", "prim1_l", "prim3_l", "prim5_l", "prim7_l", "wing_r", "wing_r", "wing_r", "prim1_r", "prim3_r", "prim5_r", "prim7_r", "wing_l", "wing_out_l", "wing_out_l", "wing_r", "wing_out_r", "wing_out_r"};
     /** 骨の回転の中心から見た点（GeckoLib の中の座標・ブロック単位） */
-    public static final float[][] LIVE_OFFSETS = {{0.0000f, 0.0000f, 3.7500f}, {0.0000f, 0.0000f, 3.7500f}, {-0.7063f, 0.0063f, 1.1250f}, {-1.3062f, 0.0063f, 1.2500f}, {-1.9062f, 0.0063f, 1.2500f}, {0.0000f, 0.0000f, 1.6250f}, {0.0000f, 0.0000f, 1.7500f}, {0.0000f, 0.0000f, 1.9375f}, {0.0000f, 0.0000f, 2.8125f}, {0.7063f, 0.0063f, 1.1250f}, {1.3062f, 0.0063f, 1.2500f}, {1.9062f, 0.0063f, 1.2500f}, {0.0000f, 0.0000f, 1.6250f}, {0.0000f, 0.0000f, 1.7500f}, {0.0000f, 0.0000f, 1.9375f}, {0.0000f, 0.0000f, 2.8125f}, {0.0000f, 0.0000f, 0.0000f}, {0.0000f, 0.0000f, 0.0000f}, {-4.4375f, 0.0312f, -0.5156f}, {0.0000f, 0.0000f, 0.0000f}, {0.0000f, 0.0000f, 0.0000f}, {4.4375f, 0.0312f, -0.5156f}};
-    public static final double[][] LIVE_GLIDE = {{5.883, 2.310, 0.151}, {-5.801, 2.598, -0.462}, {0.732, 1.315, -0.397}, {1.096, 1.350, -0.441}, {1.453, 1.386, -0.410}, {2.357, 1.517, -0.271}, {2.987, 1.653, -0.203}, {3.722, 1.813, -0.105}, {4.906, 2.067, -0.071}, {-0.677, 1.350, -0.471}, {-1.031, 1.403, -0.552}, {-1.388, 1.455, -0.558}, {-2.294, 1.632, -0.515}, {-2.920, 1.799, -0.513}, {-3.653, 1.994, -0.491}, {-4.820, 2.306, -0.580}, {0.254, 1.269, 0.238}, {1.741, 1.415, 0.369}, {4.230, 1.981, 1.187}, {-0.270, 1.282, 0.211}, {-1.754, 1.501, 0.185}, {-4.284, 2.191, 0.741}};
+    public static final float[][] LIVE_OFFSETS = {{0.0000f, 0.0000f, 3.8750f}, {0.0000f, 0.0000f, 3.8750f}, {-0.7063f, 0.0063f, 1.1250f}, {-1.3062f, 0.0063f, 1.2500f}, {-1.9062f, 0.0063f, 1.2500f}, {0.0000f, 0.0000f, 1.7500f}, {0.0000f, 0.0000f, 2.1875f}, {0.0000f, 0.0000f, 2.7500f}, {0.0000f, 0.0000f, 3.4375f}, {0.7063f, 0.0063f, 1.1250f}, {1.3062f, 0.0063f, 1.2500f}, {1.9062f, 0.0063f, 1.2500f}, {0.0000f, 0.0000f, 1.7500f}, {0.0000f, 0.0000f, 2.1875f}, {0.0000f, 0.0000f, 2.7500f}, {0.0000f, 0.0000f, 3.4375f}, {0.0000f, 0.0000f, 0.0000f}, {0.0000f, 0.0000f, 0.0000f}, {-4.4375f, 0.0312f, -0.5156f}, {0.0000f, 0.0000f, 0.0000f}, {0.0000f, 0.0000f, 0.0000f}, {4.4375f, 0.0312f, -0.5156f}};
+    public static final double[][] LIVE_GLIDE = {{5.944, 2.309, -0.719}, {-5.771, 2.598, -1.334}, {0.732, 1.315, -0.397}, {1.096, 1.350, -0.441}, {1.453, 1.386, -0.410}, {2.692, 1.588, -0.357}, {3.554, 1.771, -0.447}, {4.459, 1.963, -0.551}, {5.409, 2.165, -0.675}, {-0.677, 1.350, -0.471}, {-1.031, 1.403, -0.552}, {-1.388, 1.455, -0.558}, {-2.614, 1.718, -0.635}, {-3.451, 1.943, -0.814}, {-4.331, 2.179, -1.012}, {-5.251, 2.427, -1.234}, {0.254, 1.269, 0.238}, {1.741, 1.415, 0.369}, {4.357, 1.996, 0.452}, {-0.270, 1.282, 0.211}, {-1.754, 1.501, 0.185}, {-4.332, 2.210, -0.003}};
     /** TIP の最初の番号（左 1・右 1） */
     public static final int TIP = 0;
     public static final int TIP_PER_SIDE = 1;

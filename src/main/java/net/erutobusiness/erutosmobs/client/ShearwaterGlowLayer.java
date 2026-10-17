@@ -17,7 +17,8 @@ import software.bernie.geckolib.renderer.GeoRenderer;
 import software.bernie.geckolib.renderer.layer.GeoRenderLayer;
 
 /**
- * 光る層。琥珀の端・目・顔のハネの泡の線（キットが `shearwater_glow.png` に塗る）を、暗さと嵐で光らせる。
+ * 光る層。金から桃色の端と目の光（キットが `shearwater_glow.png` に塗る）を、暗さと嵐で光らせる。
+ * 2026-10-17 の 2.0 から、顔のハネ（とその泡の線）は無い。
  *
  * 前例（jar を読んだ一次の値）: タイヨウチョウは `sunbird_glow.png` を目の描き方（eyes）で重ね、明るさも常に最大。
  * Cobblemon のファイヤー・ホウオウは体の光る層、サンダー・フリーザー・ルギアは目だけ。
